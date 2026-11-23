@@ -8,8 +8,12 @@ plugins {
 
 android {
     namespace = "com.rusdili.pro.feature.news"
-    compileSdk = 34
+    compileSdk = 36
     defaultConfig { minSdk = 24 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
     buildFeatures { compose = true }
 }
 
