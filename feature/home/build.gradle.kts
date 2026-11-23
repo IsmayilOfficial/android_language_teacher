@@ -1,0 +1,28 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.hilt)
+}
+
+android {
+    namespace = "com.rusdili.pro.feature.home"
+    compileSdk = 34
+    defaultConfig { minSdk = 24 }
+    buildFeatures { compose = true }
+}
+
+dependencies {
+    implementation(project(":core:common"))
+    implementation(project(":core:ui"))
+    implementation(project(":core:database"))
+    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons)
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler)
+}

@@ -1,0 +1,192 @@
+You are a Senior Android Developer. Build a complete, working Android app. Do NOT ask clarifying questions. Do NOT explain theory. Write code files one by one. If something is unclear, choose the simplest working option and continue.
+
+APP NAME: RusDili Pro - Russian + News Feed
+TARGET USER: A person in Azerbaijan, age 15-35, who wants to learn Russian from zero to B1.
+UI LANGUAGE: All user interface text, explanations, and lesson instructions MUST be in Azerbaijani (Latin alphabet). The language being learned is Russian (Cyrillic).
+EXAMPLE: Button = "Dərsə başla", not "Start Lesson". Lesson explanation = Azerbaijani. Example sentence = Russian.
+
+1. TECH STACK - USE EXACTLY THIS
+
+- Language: Kotlin 100%. No Java.
+- UI: Jetpack Compose with Material 3. Single Activity.
+- Navigation: Navigation Compose with a Bottom Navigation Bar with 5 tabs.
+- Dependency Injection: Hilt.
+- Local Database: Room.
+- Preferences: DataStore Preferences.
+- Network: Retrofit + OkHttp + Moshi.
+- Images: Coil.
+- Background Work: WorkManager.
+- Audio: Android TextToSpeech, language = Russian (ru-RU).
+- Minimum SDK: 24. Target SDK: 34.
+- Do NOT use: WebView, Firebase, Login, Ads, XML layouts (except theme). All screens must be Compose.
+
+2. ARCHITECTURE - CLEAN ARCHITECTURE + MVVM
+
+You MUST use 3 layers. Never put logic in Activity or Composable.
+
+Layer 1 - PRESENTATION:
+- Each screen has 3 files: Screen.kt, ViewModel.kt, UiState.kt
+- ViewModel exposes ONE StateFlow<UiState>. UiState is a sealed class: Loading, Success(data), Error(message).
+- Composable only reads state and calls ViewModel functions. No direct database or network calls in Composable.
+
+Layer 2 - DOMAIN:
+- Domain models are plain Kotlin data classes. No Room annotations, no Retrofit annotations here.
+- One UseCase = One function. Example: GetLessonByIdUseCase, CompleteLessonUseCase, GetNewsUseCase, SearchWordUseCase.
+- Repository is an INTERFACE in Domain.
+
+Layer 3 - DATA:
+- RepositoryImpl implements the Domain Repository interface.
+- Room: Entity + DAO + Database.
+- Retrofit: ApiService interface.
+- Mapper functions convert Entity/DTO -> Domain Model.
+
+Gradle multi-module structure. Create these modules exactly:
+:app - only MainActivity, Navigation, Hilt Application, theme wiring
+:core:common - Result class, constants
+:core:ui - reusable Composables: LessonCard, QuizCard, NewsCard, ProgressBar, AppButton
+:core:database - Room entities, DAOs, Database, seed data
+:core:network - Retrofit, News ApiService, DTOs
+:feature:home - Home screen
+:feature:book - Interactive Book screens
+:feature:quiz - Practice screens
+:feature:dictionary - Dictionary screens
+:feature:news - News Feed screens
+
+If the tool cannot create multi-module easily, create the same package structure inside :app: com.rusdili.pro.core..., com.rusdili.pro.feature... Do NOT skip the layer separation.
+
+3. BOTTOM NAVIGATION - 5 SCREENS
+
+1. Home - "Ev"
+2. Book - "Kitab"
+3. Practice - "Məşq"
+4. Dictionary - "Lüğət"
+5. News - "Xəbərlər"
+
+Navigation must work. Tapping a tab must switch screen without crash. Back button must go to previous screen.
+
+4. SCREEN 1 - HOME ("Ev")
+
+Show:
+- Top bar: "RusDili Pro" + streak icon (flame) + streak number.
+- Card: "Bugünkü hədəf" - Progress bar 0-50 XP. Text: "Bu gün 0 / 50 XP"
+- Card: "Davam et" - last unfinished lesson name + button "Davam et" -> navigates to Book lesson.
+- Card: "Günün sözü" - Russian word + Azerbaijani translation + example sentence. Example: книга - kitab - "Я читаю книгу."
+- Card: "Son xəbər" - latest news title (Azerbaijani) + button "Hamısını gör" -> navigates to News.
+- Button: "Gündəlik məşqə başla" -> navigates to Practice.
+
+5. SCREEN 2 - INTERACTIVE BOOK ("Kitab") - THE MAIN VALUE
+
+This is an interactive book, not a PDF. Inspired by 【entity-Duolingo¦canonical_name=Duolingo】 (short gamified lessons), 【entity-Babbel¦canonical_name=Babbel】 (clear grammar explanations), LingQ (tap any word to see translation), Anki (spaced repetition).
+
+Rules:
+- 15 chapters. Chapters are LOCKED in order. Chapter N+1 unlocks only if Chapter N quiz score >= 80%.
+- Show list: Chapter number, title in Azerbaijani, progress %, lock icon if locked.
+- Tapping a chapter opens Chapter Detail: list of lessons inside.
+- Each chapter has: 1 Rule Card + 3-5 Lessons + 1 Final Quiz.
+
+Each Lesson MUST contain:
+a) Rule Card: Title in Azerbaijani, explanation in Azerbaijani (2-4 sentences), 3 example sentences: Russian sentence (bold) + Azerbaijani translation + transliteration.
+b) Tap-to-translate: Tapping any Russian word in an example shows a bottom sheet with: word, translation, grammatical form. Implement with clickable text.
+c) Listen button: Speaker icon. On click, use TextToSpeech to speak the Russian sentence.
+d) 5 exercises, in this exact order:
+   1. Multiple choice - choose correct translation
+   2. Fill the blank - choose correct ending
+   3. Choose the case - "Bu cümlədə 'книгу' hansı haldadır?"
+   4. Build sentence - put words in correct order (drag or tap in order)
+   5. Listen and type - play audio, user types what they hear
+e) Immediate feedback: Correct = green + "Doğrudur!" + 10 XP. Wrong = red + explanation in Azerbaijani why it is wrong + correct rule. Do NOT just say "Wrong".
+f) End of lesson: Show score, XP earned, button "Növbəti dərs".
+
+CHAPTER CONTENT - USE EXACTLY THIS ORDER AND CONTENT:
+
+Chapter 1 - Alphabet - "Əlifba"
+Content: Russian alphabet has 33 letters: 10 vowels, 21 consonants, 2 signs (ь, ъ). Vowels pairs: А-Я, Э-Е, Ы-И, О-Ё, У-Ю. Ь softens previous consonant: мать. Ъ blocks softening: въезд. Always hard: Ж Ш Ц. Always soft: Ч Щ.
+Exercises: Match letter to sound, write letter, read word.
+
+Chapter 2 - Stress and Reduction - "Vurğu və reduksiya"
+Content: Stress is free in Russian. Unstressed O sounds like A: молоко sounds like [malako] but written молоко. Unstressed E after soft consonant sounds like I. Never write as you hear. Check root: вода -> воды.
+Exercises: Find stressed vowel, choose correct spelling.
+
+Chapter 3 - Noun and Gender - "İsim və Cins"
+Content: Masculine: ends in consonant: стол, брат. Feminine: -а/-я/-ь: книга, мама, ночь. Neuter: -о/-е: окно, море. Exception: день is masculine, ночь is feminine, мать is feminine.
+Exercises: Choose gender.
+
+Chapter 4 - 6 Cases - "6 Hal"
+Content: Nominative (кто? что?) = subject. Genitive (кого? чего?) = absence, possession. Dative (кому? чему?) = to whom. Accusative (кого? что?) = direct object. Instrumental (кем? чем?) = with what. Prepositional (о ком? о чём? где?) = about, where, only with preposition.
+Table for стол / книга / окно in all 6 cases. Rule: Inanimate masculine/neuter Accusative = Nominative. Animate masculine Accusative = Genitive: вижу брата, вижу стол.
+Exercises: Choose case, choose ending.
+
+Chapter 5 - Adjective - "Sifət"
+Content: Adjective agrees with noun in gender, number, case: новый дом, новая книга, новое окно, новые дома. Short adjective only as predicate: дом новый. Comparison: хороший - лучше - лучший, плохой - хуже - худший.
+Exercises: Choose correct adjective ending.
+
+Chapter 6 - Pronouns - "Əvəzliklər"
+Content: Personal pronouns in 6 cases table: я/меня/мне/меня/мной/обо мне, ты/тебя/тебе/тебя/тобой/о тебе, он/его/ему/его/им/о нём, она/её/ей/её/ей/о ней, мы/нас/нам/нас/нами/о нас, вы/вас/вам/вас/вами/о вас, они/их/им/их/ими/о них. Possessive: мой/моя/моё/мои, его does NOT change, её does NOT change, их does NOT change. Вы = plural AND polite singular.
+Exercises: Choose correct pronoun form.
+
+Chapter 7 - Numbers - "Saylar"
+Content: 1 -> Nominative singular: один день. 2,3,4 -> Genitive singular: два дня, три книги. 5+ -> Genitive plural: пять дней. 21 -> like 1: двадцать один день.
+Exercises: Choose correct noun form after number.
+
+Chapter 8 - Verb Aspect - "Feilin Növü"
+Content: Imperfective = process, repetition: я читаю (I am reading). Perfective = one-time finished result: я прочитал (I finished reading). Perfective has NO present tense. Pairs (learn as pairs): делать-сделать, читать-прочитать, писать-написать, говорить-сказать, смотреть-посмотреть, видеть-увидеть, слушать-послушать, брать-взять, давать-дать, помогать-помочь, начинать-начать, заканчивать-закончить, покупать-купить, готовить-приготовить, учить-выучить, думать-подумать. Rule: "каждый день, всегда, часто" -> Imperfective. "вчера, уже, вдруг" + finished -> Perfective.
+Exercises: Choose aspect.
+
+Chapter 9 - Verb Tenses - "Feil Zamanları"
+Content: Present: Conjugation I (-ать/-ять/-еть): читаю, читаешь, читает, читаем, читаете, читают. Conjugation II (-ить): говорю, говоришь, говорит, говорим, говорите, говорят. Past: no person, only gender/number: читал/читала/читало/читали. Future Imperfective: буду + infinitive: буду читать. Future Perfective: perfective verb with present endings: прочитаю.
+Exercises: Conjugate verb.
+
+Chapter 10 - Verbs of Motion - "Hərəkət Feilləri"
+Content: One direction now: идти (on foot), ехать (by transport), лететь (by plane). Habitual / multi-direction: ходить, ездить, летать. Example: Сейчас я иду домой (now, one direction). Каждый день я хожу на работу (habit).
+Exercises: Choose идти vs ходить.
+
+Chapter 11 - Reflexive Verbs - "Qayıdış Feilləri"
+Content: End in -ся after consonant, -сь after vowel: умываться, учусь. Meaning can change: учить (to teach) -> учиться (to study), встретить -> встретиться. Always reflexive: нравиться, смеяться, бояться.
+Exercises: Choose -ся form.
+
+Chapter 12 - Imperative and Conditional - "Əmr və Şərt"
+Content: Imperative: читай/читайте, говори/говорите, иди/идите. Soft proposal: давай + verb: Давай пойдём. Conditional: Past + бы: хотел бы. Real condition: если + present/future -> future. Unreal: если бы + past -> past + бы.
+Exercises: Build imperative, build conditional.
+
+Chapter 13 - Participles and Gerunds - "Feili Sifət və Feili Zərf"
+Content: Recognition level only. Present Active: читающий (reading). Past Active: читавший. Present Passive: читаемый. Past Passive: прочитанный. Gerund Imperfective: читая (while reading). Gerund Perfective: прочитав (after reading).
+Exercises: Recognize form.
+
+Chapter 14 - Syntax - "Sintaksis"
+Content: Basic order SVO: Я читаю книгу. Order can change for emphasis: Книгу читаю я = It is ME who reads the book. Question often only intonation: Ты идёшь? Double negation is normal and strengthens: Я ничего не знаю = I know nothing. Complex sentence: который, что, когда, если, потому что, чтобы. Comma is mandatory before subordinate clause: Я знаю, что ты придёшь.
+Exercises: Choose word order, add comma.
+
+Chapter 15 - Spelling - "Orfoqrafiya"
+Content: After Ж Ш Ч Щ never write Ы, always И: жи, ши, чи, щи. After Ж Ч Ш Щ Ц never write Я/Ю, always А/У: ча, ща, чу, щу. After Г К Х always И: ги, ки, хи. Ё is always stressed. Check unstressed vowel with stressed form: вода -> воды.
+Exercises: Choose correct spelling.
+
+6. SCREEN 3 - PRACTICE ("Məşq")
+
+- Daily Practice: 10 random questions from completed chapters.
+- Flashcards: Front = Russian word. Back = translation + full case table + example. Button "Bilirəm" / "Bilmirəm".
+- Spaced Repetition: Wrong words must reappear after 1 hour, 1 day, 3 days, 7 days. Implement with Room field nextReviewDate.
+- Streak: +1 if user completes at least 1 lesson per day. Show flame.
+- XP: Each correct answer = 10 XP. Daily goal = 50 XP.
+
+7. SCREEN 4 - DICTIONARY ("Lüğət")
+
+- Search field: User types in Russian OR Azerbaijani. Results appear immediately (no search button needed).
+- Each word detail shows: Russian word, Azerbaijani translation, gender (for nouns), full case table (singular + plural), for verbs: aspect pair + all tenses.
+- Favorites: Heart icon to save. Favorites tab shows saved words.
+- History: Last 20 searched words.
+- MUST work offline. All data from Room.
+
+Seed 100 words minimum. Include: книга, стол, окно, дом, мама, брат, друг, вода, хлеб, молоко, день, ночь, работа, школа, город, человек, время, рука, глаз, слово + 30 verb pairs from Chapter 8 + numbers.
+
+8. SCREEN 5 - NEWS FEED ("Xəbərlər") - VERY IMPORTANT
+
+- Two tabs at top: "Tramp" and "Dünya"
+- "Tramp" tab: ONLY 【entity-Donald Trump¦canonical_name=Donald Trump】 Truth Social posts.
+- "Dünya" tab: World news.
+- Each News Card MUST show: Title in Azerbaijani, short summary in Azerbaijani (2-3 sentences), original text (English/Russian), source name, time, image (if available), "Mənbə" link button.
+- DO NOT invent news. If no news, show text: "Hələlik yeni xəbər yoxdur".
+- If news is unconfirmed, show yellow label: "Təsdiqlənməyib".
+- Example SEED news to include on first launch (do NOT delete this):
+  Title (AZ): "Tramp Putinlə fotosunu 'Mənim dostum' yazıb paylaşdı"
+  Summary (AZ): "ABŞ prezidenti Donald Tramp 21 noyabr 2026-cı ildə Truth Social-da Vladimir Putinlə əl sıxışan fotosunu paylaşdı və üstünə 'My Friend' yazdı. Foto 19 noyabrda Şençjendə keçirilən görüşdən sonra paylaşılıb."
+  Original: "My Friend"
