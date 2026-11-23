@@ -1,11 +1,13 @@
 package com.rusdili.pro.core.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -13,13 +15,27 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.rusdili.pro.core.common.NewsItem
+
+@Composable
+fun AppLogo(modifier: Modifier = Modifier, size: Dp = 36.dp) {
+    Image(
+        painter = painterResource(id = R.drawable.img_core_rusdili_logo),
+        contentDescription = "LL - Learn Language loqosu",
+        contentScale = ContentScale.Crop,
+        modifier = modifier.size(size).clip(RoundedCornerShape(10.dp))
+    )
+}
 
 @Composable
 fun AppButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -67,12 +83,12 @@ fun NewsCard(item: NewsItem, modifier: Modifier = Modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (item.unconfirmed) {
                 Surface(
-                    color = androidx.compose.ui.graphics.Color(0xFFFFF0C2),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Text(
                         "Təsdiqlənməyib",
-                        color = androidx.compose.ui.graphics.Color(0xFF704900),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }

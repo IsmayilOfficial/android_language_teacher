@@ -1,26 +1,34 @@
 package com.rusdili.pro.feature.dictionary
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,6 +57,20 @@ fun DictionaryScreen(viewModel: DictionaryViewModel = hiltViewModel()) {
 @Composable
 private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewModel) {
     var selectedWord by remember { mutableStateOf<Word?>(null) }
+    var wordToAddToDeck by remember { mutableStateOf<Word?>(null) }
+    var activeReviewDeckId by remember { mutableStateOf<Long?>(null) }
+
+    val activeReviewDeck = activeReviewDeckId?.let { id -> data.decks.firstOrNull { it.id == id } }
+    if (activeReviewDeck != null) {
+        DeckReviewScreen(
+            deck = activeReviewDeck,
+            onSpeak = viewModel::speak,
+            onStopSpeech = viewModel::stopSpeech,
+            onRecordReview = viewModel::recordFlashcardReview,
+            onExit = { activeReviewDeckId = null }
+        )
+        return
+    }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -57,48 +80,206 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
             value = data.query,
             onValueChange = viewModel::search,
             label = { Text("Rusca və ya azərbaycanca axtar") },
-            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (data.query.isNotEmpty()) {
+                    IconButton(
+                        onClick = { viewModel.search("") },
+                        modifier = Modifier.testTag("dict_clear_search_button")
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Axtarışı təmizlə")
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dict_search_input"),
             singleLine = true
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { viewModel.showFavorites(false) }) { Text("Bütün sözlər") }
-            OutlinedButton(onClick = { viewModel.showFavorites(true) }) { Text("Seçilmişlər") }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = data.section == DictionarySection.ALL,
+                onClick = { viewModel.selectSection(DictionarySection.ALL) },
+                label = { Text("Bütün sözlər") },
+                modifier = Modifier.testTag("dict_tab_all")
+            )
+            FilterChip(
+                selected = data.section == DictionarySection.FAVORITES,
+                onClick = { viewModel.selectSection(DictionarySection.FAVORITES) },
+                label = { Text("Seçilmişlər (${data.favoriteWords.size})") },
+                modifier = Modifier.testTag("dict_tab_favorites")
+            )
+            FilterChip(
+                selected = data.section == DictionarySection.FLASHCARDS,
+                onClick = { viewModel.selectSection(DictionarySection.FLASHCARDS) },
+                label = { Text("Kart dəstləri (${data.decks.size})") },
+                modifier = Modifier.testTag("dict_tab_flashcards")
+            )
+            FilterChip(
+                selected = data.section == DictionarySection.HISTORY,
+                onClick = { viewModel.selectSection(DictionarySection.HISTORY) },
+                label = { Text("Tarixçə (${data.history.size})") },
+                modifier = Modifier.testTag("dict_tab_history")
+            )
         }
-        if (data.query.isBlank() && data.history.isNotEmpty()) {
-            Text("Son axtarışlar", style = MaterialTheme.typography.titleSmall)
-            Text(data.history.take(20).joinToString("  ·  "))
-        }
-        if (data.words.isEmpty()) {
-            Text(if (data.favoritesOnly) "Seçilmiş söz yoxdur" else "Uyğun söz tapılmadı")
-        }
-        data.words.forEach { word ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { selectedWord = word }
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(word.russian, style = MaterialTheme.typography.titleLarge)
-                        Text(word.translation)
-                        word.gender?.let { Text("Cins: $it", style = MaterialTheme.typography.bodySmall) }
-                    }
-                    IconButton(onClick = { viewModel.toggleFavorite(word) }) {
-                        Icon(
-                            if (word.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (word.isFavorite) "Seçilmişlərdən sil" else "Seçilmişlərə əlavə et"
-                        )
+        when (data.section) {
+            DictionarySection.FLASHCARDS -> {
+                FlashcardsDeckSection(
+                    decks = data.decks,
+                    allWords = data.allWords,
+                    favoriteWords = data.favoriteWords,
+                    onCreateDeck = viewModel::createDeck,
+                    onDeleteDeck = viewModel::deleteDeck,
+                    onToggleWordInDeck = viewModel::toggleWordInDeck,
+                    onStartReview = { deckId -> activeReviewDeckId = deckId }
+                )
+            }
+            DictionarySection.HISTORY -> {
+                SearchHistorySection(
+                    history = data.history,
+                    onSelectEntry = { entry ->
+                        val matchedWord = entry.matchedRussian?.let { russian ->
+                            data.allWords.firstOrNull { it.russian == russian }
+                        }
+                        if (matchedWord != null) {
+                            selectedWord = matchedWord
+                            viewModel.recordWordLookup(matchedWord)
+                        } else {
+                            viewModel.selectHistoryEntry(entry)
+                        }
+                    },
+                    onSpeak = { viewModel.speak(it) },
+                    onRemoveEntry = viewModel::removeHistoryEntry,
+                    onClearAll = viewModel::clearHistory
+                )
+            }
+            DictionarySection.ALL, DictionarySection.FAVORITES -> {
+                if (data.section == DictionarySection.ALL && data.query.isBlank() && data.history.isNotEmpty()) {
+                    RecentSearchChipsRow(
+                        history = data.history,
+                        onSelectEntry = viewModel::selectHistoryEntry,
+                        onRemoveEntry = viewModel::removeHistoryEntry,
+                        onClearAll = viewModel::clearHistory
+                    )
+                }
+                if (data.words.isEmpty()) {
+                    Text(
+                        if (data.section == DictionarySection.FAVORITES) "Seçilmiş söz yoxdur"
+                        else "Uyğun söz tapılmadı"
+                    )
+                }
+                data.words.forEach { word ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            selectedWord = word
+                            viewModel.recordWordLookup(word)
+                        }
+                    ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(word.russian, style = MaterialTheme.typography.titleLarge)
+                            Text(word.translation)
+                            word.gender?.let { Text("Cins: $it", style = MaterialTheme.typography.bodySmall) }
+                        }
+                        IconButton(
+                            onClick = { viewModel.speak(word.russian) },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("dict_speak_${word.russian}")
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Sözü rusca səsləndir: ${word.russian}"
+                            )
+                        }
+                        IconButton(
+                            onClick = { wordToAddToDeck = word },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("dict_add_to_deck_${word.russian}")
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.PlaylistAdd,
+                                contentDescription = "Kart dəstinə əlavə et: ${word.russian}"
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.toggleFavorite(word) },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("dict_favorite_${word.russian}")
+                        ) {
+                            Icon(
+                                if (word.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (word.isFavorite) "Seçilmişlərdən sil" else "Seçilmişlərə əlavə et"
+                            )
+                        }
                     }
                 }
             }
         }
     }
+    }
+    wordToAddToDeck?.let { word ->
+        AddWordToDeckDialog(
+            word = word,
+            decks = data.decks,
+            onToggleWordInDeck = viewModel::toggleWordInDeck,
+            onCreateDeckWithWord = { deckName, russian ->
+                viewModel.createDeck(deckName, "", listOf(russian))
+            },
+            onDismiss = { wordToAddToDeck = null }
+        )
+    }
     selectedWord?.let { word ->
         AlertDialog(
-            onDismissRequest = { selectedWord = null },
-            title = { Text(word.russian, fontWeight = FontWeight.Bold) },
+            onDismissRequest = {
+                viewModel.stopSpeech()
+                selectedWord = null
+            },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        word.russian,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { viewModel.speak(word.russian) },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("dict_dialog_speak_word")
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Sözü rusca səsləndir: ${word.russian}"
+                            )
+                        }
+                        TextButton(
+                            onClick = { viewModel.speak(word.russian, slow = true) },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("dict_dialog_speak_word_slow")
+                        ) {
+                            Text("Yavaş")
+                        }
+                    }
+                }
+            },
             text = {
                 Column(
                     Modifier.verticalScroll(rememberScrollState()),
@@ -115,12 +296,54 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                         Text("Bu söz üçün cins və hal cədvəli tətbiq edilmir.")
                     }
                     if (word.example.isNotBlank()) {
-                        Text("Nümunə: ${word.example}")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Nümunə: ${word.example}",
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { viewModel.speak(word.example) },
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("dict_dialog_speak_example")
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Nümunə cümləni səsləndir"
+                                )
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedWord = null }) { Text("Bağla") }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            wordToAddToDeck = word
+                            viewModel.stopSpeech()
+                            selectedWord = null
+                        },
+                        modifier = Modifier.testTag("dict_dialog_add_to_deck")
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.PlaylistAdd,
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Dəstə əlavə et")
+                    }
+                    TextButton(
+                        onClick = {
+                            viewModel.stopSpeech()
+                            selectedWord = null
+                        },
+                        modifier = Modifier.testTag("dict_dialog_close_button")
+                    ) { Text("Bağla") }
+                }
             }
         )
     }

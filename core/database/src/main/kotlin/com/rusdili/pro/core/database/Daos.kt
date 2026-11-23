@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -61,4 +62,50 @@ interface NewsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<NewsEntity>)
+}
+
+@Dao
+interface FlashcardDeckDao {
+    @Transaction
+    @Query("SELECT * FROM flashcard_decks ORDER BY createdAt DESC")
+    fun observeDecksWithWords(): Flow<List<DeckWithWords>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDeck(deck: FlashcardDeckEntity): Long
+
+    @Query("UPDATE flashcard_decks SET name = :name, description = :description WHERE id = :deckId")
+    suspend fun updateDeck(deckId: Long, name: String, description: String)
+
+    @Query("DELETE FROM flashcard_decks WHERE id = :deckId")
+    suspend fun deleteDeck(deckId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addWordToDeck(crossRef: FlashcardDeckWordEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addWordsToDeck(crossRefs: List<FlashcardDeckWordEntity>)
+
+    @Query("DELETE FROM flashcard_deck_words WHERE deckId = :deckId AND wordRussian = :wordRussian")
+    suspend fun removeWordFromDeck(deckId: Long, wordRussian: String)
+}
+
+@Dao
+interface SearchHistoryDao {
+    @Query("SELECT * FROM search_history ORDER BY searchedAt DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<SearchHistoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: SearchHistoryEntity)
+
+    @Query("DELETE FROM search_history WHERE queryKey = :queryKey")
+    suspend fun deleteByKey(queryKey: String)
+
+    @Query("DELETE FROM search_history")
+    suspend fun clearAll()
+
+    @Query(
+        "DELETE FROM search_history WHERE queryKey NOT IN " +
+            "(SELECT queryKey FROM search_history ORDER BY searchedAt DESC LIMIT :limit)"
+    )
+    suspend fun trimToLimit(limit: Int)
 }

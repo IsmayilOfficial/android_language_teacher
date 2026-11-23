@@ -37,27 +37,15 @@ private fun NewsContent(data: NewsData, viewModel: NewsViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Xəbərlər", style = MaterialTheme.typography.headlineMedium)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { viewModel.selectTab(NewsTab.TRUMP) },
-                modifier = Modifier.weight(1f)
-            ) { Text("Tramp") }
-            OutlinedButton(
-                onClick = { viewModel.selectTab(NewsTab.WORLD) },
-                modifier = Modifier.weight(1f)
-            ) { Text("Dünya") }
-        }
-        if (data.tab == NewsTab.WORLD && data.refreshing) CircularProgressIndicator()
+        Text("Xəbərlər · Dünya", style = MaterialTheme.typography.headlineMedium)
+        if (data.refreshing) CircularProgressIndicator()
         if (data.error != null) {
             Text(data.error, color = MaterialTheme.colorScheme.error)
-            if (data.tab == NewsTab.WORLD) {
-                OutlinedButton(onClick = viewModel::refreshWorld) { Text("Yenidən yoxla") }
-            }
+            OutlinedButton(onClick = viewModel::refreshWorld) { Text("Yenidən yoxla") }
         }
         if (data.items.isEmpty() && !data.refreshing) Text("Hələlik yeni xəbər yoxdur")
         data.items.forEach { item -> NewsCard(item) }
-        if (data.tab == NewsTab.WORLD && data.items.isNotEmpty()) {
+        if (data.items.isNotEmpty() || data.error == null) {
             OutlinedButton(onClick = viewModel::refreshWorld) { Text("Xəbərləri yenilə") }
         }
     }

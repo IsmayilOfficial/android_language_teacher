@@ -1,6 +1,6 @@
 You are a Senior Android Developer. Build a complete, working Android app. Do NOT ask clarifying questions. Do NOT explain theory. Write code files one by one. If something is unclear, choose the simplest working option and continue.
 
-APP NAME: RusDili Pro - Russian + News Feed
+APP NAME: LL - Learn Language - Russian + News Feed
 TARGET USER: A person in Azerbaijan, age 15-35, who wants to learn Russian from zero to B1.
 UI LANGUAGE: All user interface text, explanations, and lesson instructions MUST be in Azerbaijani (Latin alphabet). The language being learned is Russian (Cyrillic).
 EXAMPLE: Button = "Dərsə başla", not "Start Lesson". Lesson explanation = Azerbaijani. Example sentence = Russian.
@@ -67,7 +67,7 @@ Navigation must work. Tapping a tab must switch screen without crash. Back butto
 4. SCREEN 1 - HOME ("Ev")
 
 Show:
-- Top bar: "RusDili Pro" + streak icon (flame) + streak number.
+- Top bar: "LL - Learn Language" + streak icon (flame) + streak number.
 - Card: "Bugünkü hədəf" - Progress bar 0-50 XP. Text: "Bu gün 0 / 50 XP"
 - Card: "Davam et" - last unfinished lesson name + button "Davam et" -> navigates to Book lesson.
 - Card: "Günün sözü" - Russian word + Azerbaijani translation + example sentence. Example: книга - kitab - "Я читаю книгу."
@@ -180,13 +180,7 @@ Seed 100 words minimum. Include: книга, стол, окно, дом, мам�
 
 8. SCREEN 5 - NEWS FEED ("Xəbərlər") - VERY IMPORTANT
 
-- Two tabs at top: "Tramp" and "Dünya"
-- "Tramp" tab: ONLY 【entity-Donald Trump¦canonical_name=Donald Trump】 Truth Social posts.
-- "Dünya" tab: World news.
+- World news feed ("Dünya").
 - Each News Card MUST show: Title in Azerbaijani, short summary in Azerbaijani (2-3 sentences), original text (English/Russian), source name, time, image (if available), "Mənbə" link button.
 - DO NOT invent news. If no news, show text: "Hələlik yeni xəbər yoxdur".
 - If news is unconfirmed, show yellow label: "Təsdiqlənməyib".
-- Example SEED news to include on first launch (do NOT delete this):
-  Title (AZ): "Tramp Putinlə fotosunu 'Mənim dostum' yazıb paylaşdı"
-  Summary (AZ): "ABŞ prezidenti Donald Tramp 21 noyabr 2026-cı ildə Truth Social-da Vladimir Putinlə əl sıxışan fotosunu paylaşdı və üstünə 'My Friend' yazdı. Foto 19 noyabrda Şençjendə keçirilən görüşdən sonra paylaşılıb."
-  Original: "My Friend"

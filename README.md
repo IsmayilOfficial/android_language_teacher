@@ -1,6 +1,6 @@
-# RusDili Pro
+# LL - Learn Language
 
-RusDili Pro is an Android app for Azerbaijani speakers learning Russian. It combines a structured, Azerbaijani-language course with daily practice, a locally stored Russian–Azerbaijani dictionary, progress tracking, and a small news feed.
+LL - Learn Language is an Android app for Azerbaijani speakers learning Russian. It combines a structured, Azerbaijani-language course with daily practice, a locally stored Russian–Azerbaijani dictionary, progress tracking, achievements, and a world news feed.
 
 ## Features
 
@@ -8,15 +8,13 @@ RusDili Pro is an Android app for Azerbaijani speakers learning Russian. It comb
 - **Book:** 15 Russian-learning chapters, from the alphabet and pronunciation through grammar, syntax, and spelling. Explanations are in Azerbaijani and examples are in Russian. Chapters unlock in order after the previous chapter reaches a score of at least 80%.
 - **Practice:** a daily set of up to 10 questions drawn from passed chapters, plus vocabulary flashcards with spaced-review scheduling.
 - **Dictionary:** search Russian or Azerbaijani words, browse favorites and recent searches, and view available noun case forms or verb forms. The seeded vocabulary is stored locally in Room and is available without a network connection.
-- **News:** separate “Tramp” and “Dünya” filters. World headlines are fetched from GDELT and cached locally. Seeded sample content is labeled as unconfirmed where applicable.
+- **News:** world headlines ("Dünya") fetched from GDELT and cached locally. Unconfirmed items are labeled accordingly.
 - **Russian speech:** lesson sentences can be spoken using Android TextToSpeech with the `ru-RU` voice. Speech availability and voice quality depend on the device's installed TTS engine and language data.
 - **Progress:** correct answers award 10 XP, the daily goal is 50 XP, and lesson completion contributes to the streak.
 
 ### News feed scope
 
 The “Dünya” feed requests world-news articles from GDELT and stores returned items in Room. Their display title and summary are generic Azerbaijani descriptions; open the source link to read the original article and verify its context.
-
-The “Tramp” tab displays locally stored items whose source is marked “Truth Social.” It does not connect to a live Truth Social feed. The seeded example is retained and marked unconfirmed; it should not be treated as independently verified reporting.
 
 ## Technology
 
@@ -91,7 +89,6 @@ The repository includes the Windows Gradle wrapper (`gradlew.bat`). For macOS or
 - Run `.\gradlew.bat :app:installDebug` to deploy to a connected device or emulator.
 - The app requests network access only for news retrieval; the dictionary and course seed data do not require a connection.
 - GDELT and the Android TTS engine are external runtime dependencies. News refresh needs an internet connection, and speech requires an installed Russian voice.
-- The “Tramp” tab currently relies on seeded/local Truth Social-labeled items; no live Truth Social integration is configured.
 
 ## Original specification
 

@@ -8,15 +8,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,8 +50,14 @@ private fun PracticeContent(data: PracticeData, viewModel: PracticeViewModel) {
     ) {
         Text("Məşq", style = MaterialTheme.typography.headlineMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { viewModel.setMode(PracticeMode.DAILY) }) { Text("Gündəlik məşq") }
-            OutlinedButton(onClick = { viewModel.setMode(PracticeMode.FLASHCARDS) }) { Text("Kartlar") }
+            OutlinedButton(
+                onClick = { viewModel.setMode(PracticeMode.DAILY) },
+                modifier = Modifier.testTag("quiz_mode_daily")
+            ) { Text("Gündəlik məşq") }
+            OutlinedButton(
+                onClick = { viewModel.setMode(PracticeMode.FLASHCARDS) },
+                modifier = Modifier.testTag("quiz_mode_flashcards")
+            ) { Text("Kartlar") }
         }
         if (data.mode == PracticeMode.DAILY) DailyPractice(data, viewModel) else Flashcards(data, viewModel)
     }
@@ -63,15 +76,91 @@ private fun DailyPractice(data: PracticeData, viewModel: PracticeViewModel) {
         return
     }
     val question = data.currentQuestion ?: return
+    val russianInQuestion = extractRussianText(question.exercise.question)
+    val isListeningExercise = question.exercise.type == "Dinlə və yaz"
+    val russianAnswer = extractRussianText(question.exercise.answer)
+
     Text("Sual ${data.questionIndex + 1} / ${data.questions.size} · ${question.chapterTitle}")
     ProgressBar((data.questionIndex + 1) / data.questions.size.toFloat())
-    Text(question.exercise.question, style = MaterialTheme.typography.titleMedium)
-    question.exercise.options.forEach { option ->
-        OutlinedButton(
-            onClick = { viewModel.answerPractice(option) },
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            question.exercise.question,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+        if (russianInQuestion != null) {
+            IconButton(
+                onClick = { viewModel.speak(russianInQuestion) },
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("quiz_daily_speak_question")
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = "Sualdakı rusca ifadəni səsləndir"
+                )
+            }
+        }
+    }
+    if ((isListeningExercise || data.answered) && russianAnswer != null) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = { viewModel.speak(russianAnswer) },
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("quiz_daily_speak_answer")
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+                Text(if (isListeningExercise) "Dinlə" else "Düzgün cavabı dinlə")
+            }
+            TextButton(
+                onClick = { viewModel.speak(russianAnswer, slow = true) },
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("quiz_daily_speak_answer_slow")
+            ) {
+                Text("Yavaş")
+            }
+        }
+    }
+    question.exercise.options.forEachIndexed { index, option ->
+        val optionSpeech = extractRussianText(option)
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            enabled = !data.answered
-        ) { Text(option) }
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            OutlinedButton(
+                onClick = { viewModel.answerPractice(option) },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("quiz_option_$index"),
+                enabled = !data.answered
+            ) { Text(option) }
+            if (optionSpeech != null) {
+                IconButton(
+                    onClick = { viewModel.speak(optionSpeech) },
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("quiz_option_speak_$index")
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Variantı səsləndir: $optionSpeech"
+                    )
+                }
+            }
+        }
     }
     if (data.answered) {
         Text(
@@ -93,18 +182,52 @@ private fun Flashcards(data: PracticeData, viewModel: PracticeViewModel) {
     Text("Qalan kart: ${data.words.size}")
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(word.russian, style = MaterialTheme.typography.headlineMedium)
-            if (data.showingBack) WordBack(word)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    word.russian,
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = { viewModel.speak(word.russian) },
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("quiz_flashcard_speak_word")
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Sözü rusca səsləndir: ${word.russian}"
+                    )
+                }
+                TextButton(
+                    onClick = { viewModel.speak(word.russian, slow = true) },
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("quiz_flashcard_speak_word_slow")
+                ) {
+                    Text("Yavaş")
+                }
+            }
+            if (data.showingBack) WordBack(word, onSpeak = { viewModel.speak(it) })
             else Text("Tərcüməni görmək üçün karta toxun.")
         }
     }
     AppButton(if (data.showingBack) "Tərcüməni gizlət" else "Kartı çevir", viewModel::flipCard)
     if (data.showingBack) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { viewModel.rateCard(false) }, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = { viewModel.rateCard(false) },
+                modifier = Modifier.weight(1f).testTag("quiz_flashcard_unknown")
+            ) {
                 Text("Bilmirəm")
             }
-            OutlinedButton(onClick = { viewModel.rateCard(true) }, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = { viewModel.rateCard(true) },
+                modifier = Modifier.weight(1f).testTag("quiz_flashcard_known")
+            ) {
                 Text("Bilirəm")
             }
         }
@@ -112,7 +235,7 @@ private fun Flashcards(data: PracticeData, viewModel: PracticeViewModel) {
 }
 
 @Composable
-private fun WordBack(word: Word) {
+private fun WordBack(word: Word, onSpeak: (String) -> Unit) {
     Text(word.translation, style = MaterialTheme.typography.titleLarge)
     word.gender?.let { Text("Cins: $it") }
     word.aspectPair?.let { Text("Feil cütü: ${word.russian} — $it") }
@@ -123,7 +246,39 @@ private fun WordBack(word: Word) {
             Text("$case: $singular / $plural", style = MaterialTheme.typography.bodySmall)
         }
     }
-    if (word.example.isNotBlank()) Text("Nümunə: ${word.example}")
+    if (word.example.isNotBlank()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Nümunə: ${word.example}",
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = { onSpeak(word.example) },
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("quiz_flashcard_speak_example")
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = "Nümunə cümləni səsləndir"
+                )
+            }
+        }
+    }
+}
+
+private val cyrillicSegmentRegex = Regex("[\\u0400-\\u04FF]+(?:[\\s,.'\"!?-]+[\\u0400-\\u04FF]+)*")
+
+private fun extractRussianText(text: String): String? {
+    val matches = cyrillicSegmentRegex.findAll(text)
+        .map { it.value.trim() }
+        .filter { it.isNotBlank() }
+        .toList()
+    if (matches.isEmpty()) return null
+    return matches.joinToString(", ")
 }
 
 private val flashcardCases = mapOf(

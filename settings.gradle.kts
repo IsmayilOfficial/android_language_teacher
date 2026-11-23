@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RusDiliPro"
+rootProject.name = "LL-LearnLanguage"
 include(
     ":app",
     ":core:common",

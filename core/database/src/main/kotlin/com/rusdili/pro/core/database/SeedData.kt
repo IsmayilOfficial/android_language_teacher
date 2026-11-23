@@ -226,19 +226,7 @@ internal object SeedData {
         word("придёшь", "gələcəksən", example = "Когда ты придёшь?")
     )
 
-    val news = listOf(
-        NewsEntity(
-            id = "seed-trump-friend-2026-11-21",
-            titleAz = "Tramp Putinlə fotosunu 'Mənim dostum' yazıb paylaşdı",
-            summaryAz = "Verilmiş nümunə məlumatına görə, ABŞ prezidenti Donald Tramp 21 noyabr 2026-cı ildə Truth Social-da Vladimir Putinlə əl sıxışan fotosunu paylaşıb və üzərinə 'My Friend' yazıb. Məlumatın həqiqiliyi müstəqil mənbə ilə təsdiqlənməyib.",
-            original = "My Friend",
-            source = "Truth Social (təsdiqlənməyib)",
-            publishedAt = "2026-11-21T00:00:00Z",
-            imageUrl = null,
-            sourceUrl = "https://truthsocial.com/",
-            unconfirmed = true
-        )
-    )
+    val news: List<NewsEntity> = emptyList()
 
     private fun word(
         russian: String,

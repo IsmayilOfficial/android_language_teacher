@@ -28,3 +28,19 @@ data class NewsItem(
     val sourceUrl: String? = null,
     val unconfirmed: Boolean = false
 )
+
+data class FlashcardDeck(
+    val id: Long,
+    val name: String,
+    val description: String = "",
+    val words: List<Word> = emptyList(),
+    val createdAt: Long = 0L
+)
+
+data class SearchHistoryEntry(
+    val queryKey: String,
+    val query: String,
+    val matchedRussian: String? = null,
+    val matchedTranslation: String? = null,
+    val searchedAt: Long = 0L
+)

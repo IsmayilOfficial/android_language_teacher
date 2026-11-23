@@ -3,6 +3,7 @@ package com.rusdili.pro.feature.quiz
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rusdili.pro.core.common.AppConstants
+import com.rusdili.pro.core.common.RussianSpeech
 import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.common.UserProgressStore
 import com.rusdili.pro.core.common.Word
@@ -46,7 +47,8 @@ enum class PracticeMode { DAILY, FLASHCARDS }
 @HiltViewModel
 class PracticeViewModel @Inject constructor(
     private val repository: PracticeRepository,
-    private val progressStore: UserProgressStore
+    private val progressStore: UserProgressStore,
+    private val speech: RussianSpeech
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<UiState<PracticeData>>(UiState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -93,6 +95,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun setMode(mode: PracticeMode) {
+        speech.stop()
         updateData { it.copy(mode = mode) }
     }
 
@@ -101,8 +104,8 @@ class PracticeViewModel @Inject constructor(
             val exercise = data.currentQuestion?.exercise ?: return@updateData data
             if (data.answered) return@updateData data
             val correct = option.trim().equals(exercise.answer.trim(), ignoreCase = true)
-            if (correct) viewModelScope.launch {
-                progressStore.addXp(AppConstants.XP_PER_CORRECT_ANSWER)
+            viewModelScope.launch {
+                progressStore.recordQuestionCompleted(correct = correct)
             }
             data.copy(
                 correctAnswers = data.correctAnswers + if (correct) 1 else 0,
@@ -117,6 +120,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun nextQuestion() {
+        speech.stop()
         updateData { data ->
             if (data.questionIndex >= data.questions.lastIndex) {
                 data.copy(questionIndex = data.questions.size, answered = false, feedback = "")
@@ -127,6 +131,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun restartPractice() {
+        speech.stop()
         updateData { data ->
             data.copy(
                 questions = data.questions.shuffled().take(AppConstants.DAILY_PRACTICE_QUESTION_COUNT),
@@ -143,6 +148,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun rateCard(known: Boolean) {
+        speech.stop()
         val data = (_uiState.value as? UiState.Success)?.data ?: return
         val word = data.currentCard ?: return
         viewModelScope.launch {
@@ -150,8 +156,10 @@ class PracticeViewModel @Inject constructor(
             val stage = if (known) 0 else word.reviewStage.coerceIn(0, 3)
             val interval = if (known) DAY else REVIEW_INTERVALS[stage]
             repository.scheduleReview(word.russian, if (known) 0 else (stage + 1).coerceAtMost(3), now + interval)
-            if (known) progressStore.addXp(AppConstants.XP_PER_CORRECT_ANSWER)
-            else {
+            if (known) {
+                progressStore.addXp(AppConstants.XP_PER_CORRECT_ANSWER)
+            } else {
+                progressStore.recordDailyActivity()
                 delay(interval)
                 val dueWords = repository.dueCards()
                 updateData { current ->
@@ -166,6 +174,15 @@ class PracticeViewModel @Inject constructor(
                 showingBack = false
             )
         }
+    }
+
+    fun speak(text: String, slow: Boolean = false) {
+        speech.speak(text, slow)
+    }
+
+    override fun onCleared() {
+        speech.stop()
+        super.onCleared()
     }
 
     private fun updateData(transform: (PracticeData) -> PracticeData) {

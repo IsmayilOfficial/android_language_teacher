@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.common.AppConstants
+import com.rusdili.pro.core.common.RussianSpeech
 import com.rusdili.pro.core.common.UserProgressStore
 import com.rusdili.pro.feature.book.domain.BookWordRepository
 import com.rusdili.pro.feature.book.domain.CourseRepository
@@ -97,8 +98,8 @@ class BookViewModel @Inject constructor(
             val exercise = data.currentExercise ?: return@updateData data
             if (data.answered) return@updateData data
             val correct = option.trim().equals(exercise.answer.trim(), ignoreCase = true)
-            if (correct) viewModelScope.launch {
-                progressStore.addXp(AppConstants.XP_PER_CORRECT_ANSWER)
+            viewModelScope.launch {
+                progressStore.recordQuestionCompleted(correct = correct)
             }
             data.copy(
                 correctAnswers = data.correctAnswers + if (correct) 1 else 0,
