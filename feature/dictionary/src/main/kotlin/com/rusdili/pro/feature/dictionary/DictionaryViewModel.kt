@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rusdili.pro.core.common.AppConstants
 import com.rusdili.pro.core.common.FlashcardDeck
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.RussianSpeech
 import com.rusdili.pro.core.common.SearchHistoryEntry
 import com.rusdili.pro.core.common.UiState
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -28,6 +30,7 @@ import kotlinx.coroutines.launch
 enum class DictionarySection { ALL, FAVORITES, FLASHCARDS, HISTORY }
 
 data class DictionaryData(
+    val language: LearningLanguage = LearningLanguage.RUSSIAN,
     val query: String,
     val section: DictionarySection,
     val words: List<Word>,
@@ -50,23 +53,33 @@ class DictionaryViewModel @Inject constructor(
 ) : ViewModel() {
     private val query = MutableStateFlow("")
     private val section = MutableStateFlow(DictionarySection.ALL)
+    private val selectedLanguage = progressStore.selectedLanguage
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LearningLanguage.RUSSIAN)
 
-    private val filteredWordsFlow = combine(query, section) { text, activeSection -> text to activeSection }
-        .flatMapLatest { (text, activeSection) ->
+    private val filteredWordsFlow = combine(
+        progressStore.selectedLanguage.distinctUntilChanged(),
+        query,
+        section
+    ) { language, text, activeSection -> Triple(language, text, activeSection) }
+        .flatMapLatest { (language, text, activeSection) ->
             when (activeSection) {
-                DictionarySection.FAVORITES -> repository.favorites()
-                else -> searchWords(text)
+                DictionarySection.FAVORITES -> repository.favorites(language)
+                else -> searchWords(language, text)
             }
         }
 
-    private val wordCollectionsFlow = combine(
-        searchWords(""),
-        repository.favorites(),
-        deckRepository.observeDecks(),
-        repository.recentSearches()
-    ) { allWords, favoriteWords, decks, history ->
-        WordCollections(allWords, favoriteWords, decks, history)
-    }
+    private val wordCollectionsFlow = progressStore.selectedLanguage
+        .distinctUntilChanged()
+        .flatMapLatest { language ->
+            combine(
+                searchWords(language, ""),
+                repository.favorites(language),
+                deckRepository.observeDecks(language),
+                repository.recentSearches(language)
+            ) { allWords, favoriteWords, decks, history ->
+                WordCollections(language, allWords, favoriteWords, decks, history)
+            }
+        }
 
     private val speechStateFlow = combine(
         speech.speakingText,
@@ -82,6 +95,7 @@ class DictionaryViewModel @Inject constructor(
     ) { text, activeSection, displayedWords, collections, (speaking, available) ->
         val state: UiState<DictionaryData> = UiState.Success(
             DictionaryData(
+                language = collections.language,
                 query = text,
                 section = activeSection,
                 words = displayedWords,
@@ -97,6 +111,7 @@ class DictionaryViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)
 
     private data class WordCollections(
+        val language: LearningLanguage,
         val allWords: List<Word>,
         val favoriteWords: List<Word>,
         val decks: List<FlashcardDeck>,
@@ -105,8 +120,20 @@ class DictionaryViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            progressStore.selectedLanguage
+                .distinctUntilChanged()
+                .drop(1)
+                .collect {
+                    query.value = ""
+                    section.value = DictionarySection.ALL
+                    speech.stop()
+                }
+        }
+        viewModelScope.launch {
             query.debounce(550).distinctUntilChanged().collect { value ->
-                if (value.isNotBlank()) repository.recordSearch(value.trim())
+                if (value.isNotBlank()) {
+                    repository.recordSearch(selectedLanguage.value, value.trim())
+                }
             }
         }
     }
@@ -123,42 +150,48 @@ class DictionaryViewModel @Inject constructor(
     }
 
     fun toggleFavorite(word: Word) {
+        val lang = LearningLanguage.fromCode(word.language)
         viewModelScope.launch {
-            repository.setFavorite(word.russian, !word.isFavorite)
+            repository.setFavorite(lang, word.russian, !word.isFavorite)
         }
     }
 
     fun recordWordLookup(word: Word) {
+        val lang = LearningLanguage.fromCode(word.language)
         viewModelScope.launch {
-            repository.recordSearch(word.russian, matchedWord = word)
+            repository.recordSearch(lang, word.russian, matchedWord = word)
         }
     }
 
     fun selectHistoryEntry(entry: SearchHistoryEntry) {
+        val lang = LearningLanguage.fromCode(entry.language)
         val searchTerm = entry.matchedRussian ?: entry.query
         query.value = searchTerm
         section.value = DictionarySection.ALL
         viewModelScope.launch {
-            repository.recordSearch(searchTerm)
+            repository.recordSearch(lang, searchTerm)
         }
     }
 
     fun removeHistoryEntry(queryKey: String) {
+        val lang = selectedLanguage.value
         viewModelScope.launch {
-            repository.removeSearchHistoryEntry(queryKey)
+            repository.removeSearchHistoryEntry(lang, queryKey)
         }
     }
 
     fun clearHistory() {
+        val lang = selectedLanguage.value
         viewModelScope.launch {
-            repository.clearSearchHistory()
+            repository.clearSearchHistory(lang)
         }
     }
 
     fun createDeck(name: String, description: String, initialWords: List<String>) {
         if (name.isBlank()) return
+        val lang = selectedLanguage.value
         viewModelScope.launch {
-            deckRepository.createDeck(name, description, initialWords)
+            deckRepository.createDeck(lang, name, description, initialWords)
         }
     }
 
@@ -169,27 +202,29 @@ class DictionaryViewModel @Inject constructor(
     }
 
     fun toggleWordInDeck(deckId: Long, wordRussian: String, currentlyInDeck: Boolean) {
+        val lang = selectedLanguage.value
         viewModelScope.launch {
             if (currentlyInDeck) {
-                deckRepository.removeWordFromDeck(deckId, wordRussian)
+                deckRepository.removeWordFromDeck(lang, deckId, wordRussian)
             } else {
-                deckRepository.addWordToDeck(deckId, wordRussian)
+                deckRepository.addWordToDeck(lang, deckId, wordRussian)
             }
         }
     }
 
     fun recordFlashcardReview(known: Boolean) {
+        val lang = selectedLanguage.value
         viewModelScope.launch {
             if (known) {
-                progressStore.addXp(AppConstants.XP_PER_CORRECT_ANSWER / 2)
+                progressStore.addXp(AppConstants.XP_PER_CORRECT_ANSWER / 2, lang)
             } else {
-                progressStore.recordDailyActivity()
+                progressStore.recordDailyActivity(lang)
             }
         }
     }
 
     fun speak(text: String, slow: Boolean = false) {
-        speech.speak(text, slow)
+        speech.speak(text, slow, language = selectedLanguage.value)
     }
 
     fun stopSpeech() {

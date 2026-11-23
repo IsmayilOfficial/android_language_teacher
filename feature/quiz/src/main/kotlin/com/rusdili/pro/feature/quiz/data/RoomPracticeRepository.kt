@@ -1,5 +1,6 @@
 package com.rusdili.pro.feature.quiz.data
 
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.ReviewSession
 import com.rusdili.pro.core.common.ReviewSessionType
 import com.rusdili.pro.core.common.Word
@@ -24,22 +25,27 @@ class RoomPracticeRepository @Inject constructor(
     private val chapterProgressDao: ChapterProgressDao,
     private val reviewSessionDao: ReviewSessionDao
 ) : PracticeRepository {
-    override fun observeWords(): Flow<List<Word>> =
-        wordDao.observeAll().map { rows -> rows.map(WordEntity::toDomain) }
+    override fun observeWords(language: LearningLanguage): Flow<List<Word>> =
+        wordDao.observeAll(language.code).map { rows -> rows.map(WordEntity::toDomain) }
 
-    override fun observeChapterScores(): Flow<List<ChapterScore>> =
-        chapterProgressDao.observeAll().map { rows ->
+    override fun observeChapterScores(language: LearningLanguage): Flow<List<ChapterScore>> =
+        chapterProgressDao.observeByLanguage(language.code).map { rows ->
             rows.map { ChapterScore(it.chapterId, it.scorePercent) }
         }
 
-    override fun observeReviewSessions(): Flow<List<ReviewSession>> =
-        reviewSessionDao.observeAll().map { rows -> rows.map(ReviewSessionEntity::toDomain) }
+    override fun observeReviewSessions(language: LearningLanguage): Flow<List<ReviewSession>> =
+        reviewSessionDao.observeByLanguage(language.code).map { rows -> rows.map(ReviewSessionEntity::toDomain) }
 
-    override suspend fun dueCards(): List<Word> =
-        wordDao.dueForReview(System.currentTimeMillis(), 100).map(WordEntity::toDomain)
+    override suspend fun dueCards(language: LearningLanguage): List<Word> =
+        wordDao.dueForReview(language.code, System.currentTimeMillis(), 100).map(WordEntity::toDomain)
 
-    override suspend fun scheduleReview(word: String, stage: Int, date: Long) {
-        wordDao.scheduleReview(word, stage, date)
+    override suspend fun scheduleReview(
+        language: LearningLanguage,
+        word: String,
+        stage: Int,
+        date: Long
+    ) {
+        wordDao.scheduleReview(language.code, word, stage, date)
     }
 
     override suspend fun saveReviewSession(session: ReviewSession): Long =
@@ -47,7 +53,15 @@ class RoomPracticeRepository @Inject constructor(
 }
 
 private fun WordEntity.toDomain() = Word(
-    russian, translation, gender, example, aspectPair, isFavorite, nextReviewDate, reviewStage
+    russian = russian,
+    translation = translation,
+    gender = gender,
+    example = example,
+    aspectPair = aspectPair,
+    isFavorite = isFavorite,
+    nextReviewDate = nextReviewDate,
+    reviewStage = reviewStage,
+    language = language
 )
 
 private fun ReviewSessionEntity.toDomain() = ReviewSession(
@@ -60,11 +74,13 @@ private fun ReviewSessionEntity.toDomain() = ReviewSession(
     totalItems = totalItems,
     successfulItems = successfulItems,
     xpEarned = xpEarned,
-    completedAt = completedAt
+    completedAt = completedAt,
+    language = language
 )
 
 private fun ReviewSession.toEntity() = ReviewSessionEntity(
     id = id,
+    language = language,
     sessionType = sessionType.name,
     totalItems = totalItems,
     successfulItems = successfulItems,

@@ -9,9 +9,14 @@ import androidx.room.Junction
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-@Entity(tableName = "words")
+@Entity(
+    tableName = "words",
+    indices = [Index("language"), Index("russian")]
+)
 data class WordEntity(
-    @PrimaryKey val russian: String,
+    @PrimaryKey val id: String,
+    val language: String = "ru",
+    val russian: String,
     val translation: String,
     val gender: String?,
     val example: String,
@@ -21,9 +26,14 @@ data class WordEntity(
     @ColumnInfo(defaultValue = "0") val reviewStage: Int = 0
 )
 
-@Entity(tableName = "chapter_progress")
+@Entity(
+    tableName = "chapter_progress",
+    primaryKeys = ["language", "chapterId"],
+    indices = [Index("language")]
+)
 data class ChapterProgressEntity(
-    @PrimaryKey val chapterId: Int,
+    val language: String = "ru",
+    val chapterId: Int,
     val scorePercent: Int,
     val completedAt: Long
 )
@@ -41,9 +51,13 @@ data class NewsEntity(
     val unconfirmed: Boolean
 )
 
-@Entity(tableName = "flashcard_decks")
+@Entity(
+    tableName = "flashcard_decks",
+    indices = [Index("language")]
+)
 data class FlashcardDeckEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val language: String = "ru",
     val name: String,
     val description: String = "",
     val createdAt: Long = System.currentTimeMillis()
@@ -51,7 +65,7 @@ data class FlashcardDeckEntity(
 
 @Entity(
     tableName = "flashcard_deck_words",
-    primaryKeys = ["deckId", "wordRussian"],
+    primaryKeys = ["deckId", "wordId"],
     foreignKeys = [
         ForeignKey(
             entity = FlashcardDeckEntity::class,
@@ -61,16 +75,16 @@ data class FlashcardDeckEntity(
         ),
         ForeignKey(
             entity = WordEntity::class,
-            parentColumns = ["russian"],
-            childColumns = ["wordRussian"],
+            parentColumns = ["id"],
+            childColumns = ["wordId"],
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("deckId"), Index("wordRussian")]
+    indices = [Index("deckId"), Index("wordId")]
 )
 data class FlashcardDeckWordEntity(
     val deckId: Long,
-    val wordRussian: String,
+    val wordId: String,
     val addedAt: Long = System.currentTimeMillis()
 )
 
@@ -78,28 +92,37 @@ data class DeckWithWords(
     @Embedded val deck: FlashcardDeckEntity,
     @Relation(
         parentColumn = "id",
-        entityColumn = "russian",
+        entityColumn = "id",
         associateBy = Junction(
             value = FlashcardDeckWordEntity::class,
             parentColumn = "deckId",
-            entityColumn = "wordRussian"
+            entityColumn = "wordId"
         )
     )
     val words: List<WordEntity>
 )
 
-@Entity(tableName = "search_history")
+@Entity(
+    tableName = "search_history",
+    primaryKeys = ["language", "queryKey"],
+    indices = [Index("language")]
+)
 data class SearchHistoryEntity(
-    @PrimaryKey val queryKey: String,
+    val language: String = "ru",
+    val queryKey: String,
     val displayQuery: String,
     val matchedRussian: String? = null,
     val matchedTranslation: String? = null,
     val searchedAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "review_sessions")
+@Entity(
+    tableName = "review_sessions",
+    indices = [Index("language")]
+)
 data class ReviewSessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val language: String = "ru",
     val sessionType: String,
     val totalItems: Int,
     val successfulItems: Int,

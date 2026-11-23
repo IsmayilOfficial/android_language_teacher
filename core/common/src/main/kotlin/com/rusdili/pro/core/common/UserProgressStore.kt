@@ -43,85 +43,119 @@ data class DailyProgress(
     val achievements: List<AchievementProgress> = emptyList(),
     val reminderEnabled: Boolean = false,
     val reminderHour: Int = 19,
-    val reminderMinute: Int = 0
+    val reminderMinute: Int = 0,
+    val language: LearningLanguage = LearningLanguage.RUSSIAN
 )
 
 @Singleton
 class UserProgressStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    val progress: Flow<DailyProgress> = context.userPreferences.data.map { preferences ->
-        buildDailyProgress(preferences, Date())
+    val selectedLanguageSelection: Flow<LearningLanguage?> = context.userPreferences.data.map { preferences ->
+        preferences[SELECTED_LANGUAGE]?.let { LearningLanguage.fromCode(it) }
     }
+
+    val selectedLanguage: Flow<LearningLanguage> = context.userPreferences.data.map { preferences ->
+        LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+    }
+
+    val progress: Flow<DailyProgress> = context.userPreferences.data.map { preferences ->
+        val language = LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+        buildDailyProgress(preferences, language, Date())
+    }
+
+    fun progressFor(language: LearningLanguage): Flow<DailyProgress> =
+        context.userPreferences.data.map { preferences ->
+            buildDailyProgress(preferences, language, Date())
+        }
 
     val isDarkTheme: Flow<Boolean?> = context.userPreferences.data.map { preferences ->
         preferences[DARK_THEME]
     }
 
-    suspend fun addXp(points: Int) {
+    suspend fun setSelectedLanguage(language: LearningLanguage) {
+        context.userPreferences.edit { preferences ->
+            preferences[SELECTED_LANGUAGE] = language.code
+        }
+    }
+
+    suspend fun addXp(points: Int, language: LearningLanguage? = null) {
         require(points >= 0)
         val now = Date()
         context.userPreferences.edit { preferences ->
-            applyXpInPreferences(preferences, points, now)
+            val lang = language ?: LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+            applyXpInPreferences(preferences, lang, points, now)
             if (points > 0) {
-                recordActivityInPreferences(preferences, now)
+                recordActivityInPreferences(preferences, lang, now)
             }
-            evaluateAndPersistAchievements(preferences, now)
+            evaluateAndPersistAchievements(preferences, lang, now)
         }
     }
 
     suspend fun recordQuestionCompleted(
         correct: Boolean,
-        xpReward: Int = if (correct) AppConstants.XP_PER_CORRECT_ANSWER else 0
+        xpReward: Int = if (correct) AppConstants.XP_PER_CORRECT_ANSWER else 0,
+        language: LearningLanguage? = null
     ) {
         require(xpReward >= 0)
         val now = Date()
         context.userPreferences.edit { preferences ->
-            preferences[TOTAL_QUESTIONS_COMPLETED] = (preferences[TOTAL_QUESTIONS_COMPLETED] ?: 0) + 1
+            val lang = language ?: LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+            val keys = LangKeys(lang)
+            val prevQuestions = readInt(preferences, keys.totalQuestions, LEGACY_TOTAL_QUESTIONS_COMPLETED, lang)
+            preferences[keys.totalQuestions] = prevQuestions + 1
             if (xpReward > 0) {
-                applyXpInPreferences(preferences, xpReward, now)
+                applyXpInPreferences(preferences, lang, xpReward, now)
             }
-            recordActivityInPreferences(preferences, now)
-            evaluateAndPersistAchievements(preferences, now)
+            recordActivityInPreferences(preferences, lang, now)
+            evaluateAndPersistAchievements(preferences, lang, now)
         }
     }
 
-    suspend fun markLessonCompleted() {
+    suspend fun markLessonCompleted(language: LearningLanguage? = null) {
         val now = Date()
         context.userPreferences.edit { preferences ->
-            preferences[TOTAL_LESSONS_COMPLETED] = (preferences[TOTAL_LESSONS_COMPLETED] ?: 0) + 1
-            recordActivityInPreferences(preferences, now)
-            evaluateAndPersistAchievements(preferences, now)
+            val lang = language ?: LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+            val keys = LangKeys(lang)
+            val prevLessons = readInt(preferences, keys.totalLessons, LEGACY_TOTAL_LESSONS_COMPLETED, lang)
+            preferences[keys.totalLessons] = prevLessons + 1
+            recordActivityInPreferences(preferences, lang, now)
+            evaluateAndPersistAchievements(preferences, lang, now)
         }
     }
 
-    suspend fun recordDailyActivity() {
+    suspend fun recordDailyActivity(language: LearningLanguage? = null) {
         val now = Date()
         context.userPreferences.edit { preferences ->
-            recordActivityInPreferences(preferences, now)
-            evaluateAndPersistAchievements(preferences, now)
+            val lang = language ?: LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+            recordActivityInPreferences(preferences, lang, now)
+            evaluateAndPersistAchievements(preferences, lang, now)
         }
     }
 
-    suspend fun syncStreak() {
+    suspend fun syncStreak(language: LearningLanguage? = null) {
         val now = Date()
         context.userPreferences.edit { preferences ->
+            val lang = language ?: LearningLanguage.fromCode(preferences[SELECTED_LANGUAGE])
+            val keys = LangKeys(lang)
             val today = dateString(now)
             val yesterday = yesterdayString(now)
-            val lastActive = preferences[LAST_ACTIVE_DATE] ?: preferences[LAST_LESSON_DATE]
-            val storedStreak = preferences[STREAK] ?: 0
+            val lastActive = readString(preferences, keys.lastActiveDate, LEGACY_LAST_ACTIVE_DATE, lang)
+                ?: if (lang == LearningLanguage.RUSSIAN) preferences[LEGACY_LAST_LESSON_DATE] else null
+            val storedStreak = readInt(preferences, keys.streak, LEGACY_STREAK, lang)
 
             if (lastActive != today && lastActive != yesterday && storedStreak != 0) {
-                preferences[STREAK] = 0
+                preferences[keys.streak] = 0
             }
 
-            if (lastActive != null && preferences[LAST_ACTIVE_DATE] == null) {
-                preferences[LAST_ACTIVE_DATE] = lastActive
+            if (lastActive != null && preferences[keys.lastActiveDate] == null) {
+                preferences[keys.lastActiveDate] = lastActive
             }
-            if ((preferences[BEST_STREAK] ?: 0) < storedStreak && (lastActive == today || lastActive == yesterday)) {
-                preferences[BEST_STREAK] = storedStreak
+            val bestStreak = readInt(preferences, keys.bestStreak, LEGACY_BEST_STREAK, lang)
+            if (bestStreak < storedStreak && (lastActive == today || lastActive == yesterday)) {
+                preferences[keys.bestStreak] = storedStreak
             }
-            evaluateAndPersistAchievements(preferences, now)
+            evaluateAndPersistAchievements(preferences, lang, now)
         }
     }
 
@@ -139,12 +173,19 @@ class UserProgressStore @Inject constructor(
         }
     }
 
-    private fun buildDailyProgress(preferences: Preferences, now: Date): DailyProgress {
+    private fun buildDailyProgress(
+        preferences: Preferences,
+        lang: LearningLanguage,
+        now: Date
+    ): DailyProgress {
+        val keys = LangKeys(lang)
         val today = dateString(now)
         val yesterday = yesterdayString(now)
-        val lastActive = preferences[LAST_ACTIVE_DATE] ?: preferences[LAST_LESSON_DATE]
-        val storedStreak = preferences[STREAK] ?: 0
-        val xpToday = if (preferences[XP_DATE] == today) preferences[XP_TODAY] ?: 0 else 0
+        val lastActive = readString(preferences, keys.lastActiveDate, LEGACY_LAST_ACTIVE_DATE, lang)
+            ?: if (lang == LearningLanguage.RUSSIAN) preferences[LEGACY_LAST_LESSON_DATE] else null
+        val storedStreak = readInt(preferences, keys.streak, LEGACY_STREAK, lang)
+        val xpDate = readString(preferences, keys.xpDate, LEGACY_XP_DATE, lang)
+        val xpToday = if (xpDate == today) readInt(preferences, keys.xpToday, LEGACY_XP_TODAY, lang) else 0
 
         val isStreakAlive = lastActive == today || lastActive == yesterday
         val effectiveStreak = when {
@@ -153,12 +194,16 @@ class UserProgressStore @Inject constructor(
             else -> 0
         }
 
-        val dailyXpMap = parseDailyXp(preferences[DAILY_XP_HISTORY]).toMutableMap()
+        val dailyXpMap = parseDailyXp(
+            readString(preferences, keys.dailyXpHistory, LEGACY_DAILY_XP_HISTORY, lang)
+        ).toMutableMap()
         if (xpToday > 0) {
             dailyXpMap[today] = maxOf(dailyXpMap[today] ?: 0, xpToday)
         }
 
-        val storedDates = parseActiveDates(preferences[ACTIVE_DATES])
+        val storedDates = parseActiveDates(
+            readString(preferences, keys.activeDates, LEGACY_ACTIVE_DATES, lang)
+        )
         val activeDates = buildSet {
             addAll(storedDates)
             if (lastActive != null) add(lastActive)
@@ -166,9 +211,11 @@ class UserProgressStore @Inject constructor(
         }
 
         val isTodayActive = lastActive == today || today in activeDates
-        val bestStreak = maxOf(preferences[BEST_STREAK] ?: 0, effectiveStreak)
+        val storedBest = readInt(preferences, keys.bestStreak, LEGACY_BEST_STREAK, lang)
+        val bestStreak = maxOf(storedBest, effectiveStreak)
+        val storedTotalActive = readInt(preferences, keys.totalActiveDays, LEGACY_TOTAL_ACTIVE_DAYS, lang)
         val totalActiveDays = maxOf(
-            preferences[TOTAL_ACTIVE_DAYS] ?: 0,
+            storedTotalActive,
             activeDates.size,
             if (isStreakAlive && effectiveStreak > 0) 1 else 0
         )
@@ -185,14 +232,17 @@ class UserProgressStore @Inject constructor(
             )
         }
 
+        val storedTotalXp = readInt(preferences, keys.totalXp, LEGACY_TOTAL_XP, lang)
         val totalXpEarned = maxOf(
-            preferences[TOTAL_XP] ?: 0,
+            storedTotalXp,
             dailyXpMap.values.sum(),
             xpToday
         )
-        val totalQuestionsCompleted = preferences[TOTAL_QUESTIONS_COMPLETED] ?: 0
-        val totalLessonsCompleted = preferences[TOTAL_LESSONS_COMPLETED] ?: 0
-        val unlockedTimestamps = parseUnlockedAchievements(preferences[UNLOCKED_ACHIEVEMENTS])
+        val totalQuestionsCompleted = readInt(preferences, keys.totalQuestions, LEGACY_TOTAL_QUESTIONS_COMPLETED, lang)
+        val totalLessonsCompleted = readInt(preferences, keys.totalLessons, LEGACY_TOTAL_LESSONS_COMPLETED, lang)
+        val unlockedTimestamps = parseUnlockedAchievements(
+            readString(preferences, keys.unlockedAchievements, LEGACY_UNLOCKED_ACHIEVEMENTS, lang)
+        )
         val achievements = AchievementCatalog.evaluate(
             snapshot = MilestoneSnapshot(
                 bestStreak = bestStreak,
@@ -219,58 +269,78 @@ class UserProgressStore @Inject constructor(
             achievements = achievements,
             reminderEnabled = preferences[REMINDER_ENABLED] ?: false,
             reminderHour = (preferences[REMINDER_HOUR] ?: 19).coerceIn(0, 23),
-            reminderMinute = (preferences[REMINDER_MINUTE] ?: 0).coerceIn(0, 59)
+            reminderMinute = (preferences[REMINDER_MINUTE] ?: 0).coerceIn(0, 59),
+            language = lang
         )
     }
 
-    private fun applyXpInPreferences(preferences: MutablePreferences, points: Int, now: Date) {
+    private fun applyXpInPreferences(
+        preferences: MutablePreferences,
+        lang: LearningLanguage,
+        points: Int,
+        now: Date
+    ) {
+        val keys = LangKeys(lang)
         val today = dateString(now)
-        val previousXp = if (preferences[XP_DATE] == today) preferences[XP_TODAY] ?: 0 else 0
+        val xpDate = readString(preferences, keys.xpDate, LEGACY_XP_DATE, lang)
+        val previousXp = if (xpDate == today) readInt(preferences, keys.xpToday, LEGACY_XP_TODAY, lang) else 0
         val newXp = previousXp + points
-        preferences[XP_DATE] = today
-        preferences[XP_TODAY] = newXp
+        preferences[keys.xpDate] = today
+        preferences[keys.xpToday] = newXp
         if (points > 0) {
-            val dailyXp = parseDailyXp(preferences[DAILY_XP_HISTORY]).toMutableMap()
-            val historicalSum = maxOf(preferences[TOTAL_XP] ?: 0, dailyXp.values.sum(), previousXp)
+            val dailyXp = parseDailyXp(
+                readString(preferences, keys.dailyXpHistory, LEGACY_DAILY_XP_HISTORY, lang)
+            ).toMutableMap()
+            val storedTotalXp = readInt(preferences, keys.totalXp, LEGACY_TOTAL_XP, lang)
+            val historicalSum = maxOf(storedTotalXp, dailyXp.values.sum(), previousXp)
             dailyXp[today] = maxOf(dailyXp[today] ?: 0, newXp)
-            preferences[DAILY_XP_HISTORY] = serializeDailyXp(dailyXp)
-            preferences[TOTAL_XP] = historicalSum + points
+            preferences[keys.dailyXpHistory] = serializeDailyXp(dailyXp)
+            preferences[keys.totalXp] = historicalSum + points
         }
     }
 
-    private fun evaluateAndPersistAchievements(preferences: MutablePreferences, now: Date) {
+    private fun evaluateAndPersistAchievements(
+        preferences: MutablePreferences,
+        lang: LearningLanguage,
+        now: Date
+    ) {
+        val keys = LangKeys(lang)
         val today = dateString(now)
         val yesterday = yesterdayString(now)
-        val lastActive = preferences[LAST_ACTIVE_DATE] ?: preferences[LAST_LESSON_DATE]
-        val storedStreak = preferences[STREAK] ?: 0
-        val xpToday = if (preferences[XP_DATE] == today) preferences[XP_TODAY] ?: 0 else 0
+        val lastActive = readString(preferences, keys.lastActiveDate, LEGACY_LAST_ACTIVE_DATE, lang)
+            ?: if (lang == LearningLanguage.RUSSIAN) preferences[LEGACY_LAST_LESSON_DATE] else null
+        val storedStreak = readInt(preferences, keys.streak, LEGACY_STREAK, lang)
+        val xpDate = readString(preferences, keys.xpDate, LEGACY_XP_DATE, lang)
+        val xpToday = if (xpDate == today) readInt(preferences, keys.xpToday, LEGACY_XP_TODAY, lang) else 0
         val effectiveStreak = when {
             lastActive == today -> storedStreak.coerceAtLeast(1)
             lastActive == yesterday -> storedStreak
             else -> 0
         }
-        val bestStreak = maxOf(preferences[BEST_STREAK] ?: 0, effectiveStreak)
-        val activeDates = parseActiveDates(preferences[ACTIVE_DATES])
+        val bestStreak = maxOf(readInt(preferences, keys.bestStreak, LEGACY_BEST_STREAK, lang), effectiveStreak)
+        val activeDates = parseActiveDates(readString(preferences, keys.activeDates, LEGACY_ACTIVE_DATES, lang))
         val totalActiveDays = maxOf(
-            preferences[TOTAL_ACTIVE_DAYS] ?: 0,
+            readInt(preferences, keys.totalActiveDays, LEGACY_TOTAL_ACTIVE_DAYS, lang),
             activeDates.size,
             if (effectiveStreak > 0) 1 else 0
         )
-        val dailyXpMap = parseDailyXp(preferences[DAILY_XP_HISTORY])
+        val dailyXpMap = parseDailyXp(readString(preferences, keys.dailyXpHistory, LEGACY_DAILY_XP_HISTORY, lang))
         val totalXpEarned = maxOf(
-            preferences[TOTAL_XP] ?: 0,
+            readInt(preferences, keys.totalXp, LEGACY_TOTAL_XP, lang),
             dailyXpMap.values.sum(),
             xpToday
         )
         val snapshot = MilestoneSnapshot(
             bestStreak = bestStreak,
             totalActiveDays = totalActiveDays,
-            totalQuestionsCompleted = preferences[TOTAL_QUESTIONS_COMPLETED] ?: 0,
-            totalLessonsCompleted = preferences[TOTAL_LESSONS_COMPLETED] ?: 0,
+            totalQuestionsCompleted = readInt(preferences, keys.totalQuestions, LEGACY_TOTAL_QUESTIONS_COMPLETED, lang),
+            totalLessonsCompleted = readInt(preferences, keys.totalLessons, LEGACY_TOTAL_LESSONS_COMPLETED, lang),
             totalXpEarned = totalXpEarned
         )
 
-        val unlocked = parseUnlockedAchievements(preferences[UNLOCKED_ACHIEVEMENTS]).toMutableMap()
+        val unlocked = parseUnlockedAchievements(
+            readString(preferences, keys.unlockedAchievements, LEGACY_UNLOCKED_ACHIEVEMENTS, lang)
+        ).toMutableMap()
         var changed = false
         AchievementCatalog.all.forEach { definition ->
             if (!unlocked.containsKey(definition.id) &&
@@ -281,15 +351,21 @@ class UserProgressStore @Inject constructor(
             }
         }
         if (changed) {
-            preferences[UNLOCKED_ACHIEVEMENTS] = serializeUnlockedAchievements(unlocked)
+            preferences[keys.unlockedAchievements] = serializeUnlockedAchievements(unlocked)
         }
     }
 
-    private fun recordActivityInPreferences(preferences: MutablePreferences, now: Date) {
+    private fun recordActivityInPreferences(
+        preferences: MutablePreferences,
+        lang: LearningLanguage,
+        now: Date
+    ) {
+        val keys = LangKeys(lang)
         val today = dateString(now)
         val yesterday = yesterdayString(now)
-        val lastActive = preferences[LAST_ACTIVE_DATE] ?: preferences[LAST_LESSON_DATE]
-        val currentStreak = preferences[STREAK] ?: 0
+        val lastActive = readString(preferences, keys.lastActiveDate, LEGACY_LAST_ACTIVE_DATE, lang)
+            ?: if (lang == LearningLanguage.RUSSIAN) preferences[LEGACY_LAST_LESSON_DATE] else null
+        val currentStreak = readInt(preferences, keys.streak, LEGACY_STREAK, lang)
 
         val newStreak = when (lastActive) {
             today -> currentStreak.coerceAtLeast(1)
@@ -297,21 +373,46 @@ class UserProgressStore @Inject constructor(
             else -> 1
         }
 
-        val existingDates = parseActiveDates(preferences[ACTIVE_DATES]).toMutableSet()
+        val existingDates = parseActiveDates(
+            readString(preferences, keys.activeDates, LEGACY_ACTIVE_DATES, lang)
+        ).toMutableSet()
         if (lastActive != null) existingDates.add(lastActive)
         val wasTodayRecorded = today in existingDates
         existingDates.add(today)
 
-        val previousTotal = preferences[TOTAL_ACTIVE_DAYS] ?: (existingDates.size - if (wasTodayRecorded) 0 else 1)
+        val storedTotal = preferences[keys.totalActiveDays]
+            ?: if (lang == LearningLanguage.RUSSIAN) preferences[LEGACY_TOTAL_ACTIVE_DAYS] else null
+        val previousTotal = storedTotal ?: (existingDates.size - if (wasTodayRecorded) 0 else 1)
         val newTotal = if (wasTodayRecorded) maxOf(previousTotal, existingDates.size) else previousTotal + 1
 
-        preferences[STREAK] = newStreak
-        preferences[BEST_STREAK] = maxOf(preferences[BEST_STREAK] ?: 0, newStreak)
-        preferences[LAST_ACTIVE_DATE] = today
-        preferences[LAST_LESSON_DATE] = today
-        preferences[TOTAL_ACTIVE_DAYS] = newTotal
-        preferences[ACTIVE_DATES] = existingDates.sorted().takeLast(MAX_STORED_ACTIVE_DATES).joinToString("\n")
+        preferences[keys.streak] = newStreak
+        preferences[keys.bestStreak] = maxOf(
+            readInt(preferences, keys.bestStreak, LEGACY_BEST_STREAK, lang),
+            newStreak
+        )
+        preferences[keys.lastActiveDate] = today
+        if (lang == LearningLanguage.RUSSIAN) {
+            preferences[LEGACY_LAST_LESSON_DATE] = today
+        }
+        preferences[keys.totalActiveDays] = newTotal
+        preferences[keys.activeDates] = existingDates.sorted().takeLast(MAX_STORED_ACTIVE_DATES).joinToString("\n")
     }
+
+    private fun readInt(
+        preferences: Preferences,
+        key: Preferences.Key<Int>,
+        legacyRussianKey: Preferences.Key<Int>,
+        lang: LearningLanguage
+    ): Int = preferences[key]
+        ?: if (lang == LearningLanguage.RUSSIAN) (preferences[legacyRussianKey] ?: 0) else 0
+
+    private fun readString(
+        preferences: Preferences,
+        key: Preferences.Key<String>,
+        legacyRussianKey: Preferences.Key<String>,
+        lang: LearningLanguage
+    ): String? = preferences[key]
+        ?: if (lang == LearningLanguage.RUSSIAN) preferences[legacyRussianKey] else null
 
     private fun parseActiveDates(raw: String?): Set<String> =
         raw.orEmpty()
@@ -391,21 +492,38 @@ class UserProgressStore @Inject constructor(
         }
     }
 
+    private class LangKeys(lang: LearningLanguage) {
+        private val p = lang.code
+        val xpToday = intPreferencesKey("${p}_xp_today")
+        val xpDate = stringPreferencesKey("${p}_xp_date")
+        val totalXp = intPreferencesKey("${p}_total_xp")
+        val streak = intPreferencesKey("${p}_streak")
+        val bestStreak = intPreferencesKey("${p}_best_streak")
+        val lastActiveDate = stringPreferencesKey("${p}_last_active_date")
+        val activeDates = stringPreferencesKey("${p}_active_dates")
+        val dailyXpHistory = stringPreferencesKey("${p}_daily_xp_history")
+        val totalActiveDays = intPreferencesKey("${p}_total_active_days")
+        val totalQuestions = intPreferencesKey("${p}_total_questions_completed")
+        val totalLessons = intPreferencesKey("${p}_total_lessons_completed")
+        val unlockedAchievements = stringPreferencesKey("${p}_unlocked_achievements")
+    }
+
     private companion object {
         const val MAX_STORED_ACTIVE_DATES = 90
-        val XP_TODAY = intPreferencesKey("xp_today")
-        val XP_DATE = stringPreferencesKey("xp_date")
-        val TOTAL_XP = intPreferencesKey("total_xp")
-        val STREAK = intPreferencesKey("streak")
-        val BEST_STREAK = intPreferencesKey("best_streak")
-        val LAST_LESSON_DATE = stringPreferencesKey("last_lesson_date")
-        val LAST_ACTIVE_DATE = stringPreferencesKey("last_active_date")
-        val ACTIVE_DATES = stringPreferencesKey("active_dates")
-        val DAILY_XP_HISTORY = stringPreferencesKey("daily_xp_history")
-        val TOTAL_ACTIVE_DAYS = intPreferencesKey("total_active_days")
-        val TOTAL_QUESTIONS_COMPLETED = intPreferencesKey("total_questions_completed")
-        val TOTAL_LESSONS_COMPLETED = intPreferencesKey("total_lessons_completed")
-        val UNLOCKED_ACHIEVEMENTS = stringPreferencesKey("unlocked_achievements")
+        val SELECTED_LANGUAGE = stringPreferencesKey("selected_language")
+        val LEGACY_XP_TODAY = intPreferencesKey("xp_today")
+        val LEGACY_XP_DATE = stringPreferencesKey("xp_date")
+        val LEGACY_TOTAL_XP = intPreferencesKey("total_xp")
+        val LEGACY_STREAK = intPreferencesKey("streak")
+        val LEGACY_BEST_STREAK = intPreferencesKey("best_streak")
+        val LEGACY_LAST_LESSON_DATE = stringPreferencesKey("last_lesson_date")
+        val LEGACY_LAST_ACTIVE_DATE = stringPreferencesKey("last_active_date")
+        val LEGACY_ACTIVE_DATES = stringPreferencesKey("active_dates")
+        val LEGACY_DAILY_XP_HISTORY = stringPreferencesKey("daily_xp_history")
+        val LEGACY_TOTAL_ACTIVE_DAYS = intPreferencesKey("total_active_days")
+        val LEGACY_TOTAL_QUESTIONS_COMPLETED = intPreferencesKey("total_questions_completed")
+        val LEGACY_TOTAL_LESSONS_COMPLETED = intPreferencesKey("total_lessons_completed")
+        val LEGACY_UNLOCKED_ACHIEVEMENTS = stringPreferencesKey("unlocked_achievements")
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
         val REMINDER_HOUR = intPreferencesKey("reminder_hour")
         val REMINDER_MINUTE = intPreferencesKey("reminder_minute")

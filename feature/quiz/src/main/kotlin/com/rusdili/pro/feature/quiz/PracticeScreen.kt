@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.common.Word
 import com.rusdili.pro.core.ui.AppButton
@@ -50,7 +51,7 @@ private fun PracticeContent(data: PracticeData, viewModel: PracticeViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Məşq", style = MaterialTheme.typography.headlineMedium)
+        Text("Məşq · ${data.language.displayNameAz}", style = MaterialTheme.typography.headlineMedium)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -103,9 +104,13 @@ private fun DailyPractice(data: PracticeData, viewModel: PracticeViewModel) {
         return
     }
     val question = data.currentQuestion ?: return
-    val russianInQuestion = extractRussianText(question.exercise.question)
     val isListeningExercise = question.exercise.type == "Dinlə və yaz"
-    val russianAnswer = extractRussianText(question.exercise.answer)
+    val targetInQuestion = extractTargetText(question.exercise.question, data.language)
+    val targetAnswer = if (isListeningExercise) {
+        question.exercise.answer.trim().takeIf { it.isNotEmpty() }
+    } else {
+        extractTargetText(question.exercise.answer, data.language)
+    }
 
     Text("Sual ${data.questionIndex + 1} / ${data.questions.size} · ${question.chapterTitle}")
     ProgressBar((data.questionIndex + 1) / data.questions.size.toFloat())
@@ -118,27 +123,27 @@ private fun DailyPractice(data: PracticeData, viewModel: PracticeViewModel) {
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f)
         )
-        if (russianInQuestion != null) {
+        if (targetInQuestion != null) {
             IconButton(
-                onClick = { viewModel.speak(russianInQuestion) },
+                onClick = { viewModel.speak(targetInQuestion) },
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .testTag("quiz_daily_speak_question")
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = "Sualdakı rusca ifadəni səsləndir"
+                    contentDescription = "Sualdakı ifadəni səsləndir"
                 )
             }
         }
     }
-    if ((isListeningExercise || data.answered) && russianAnswer != null) {
+    if ((isListeningExercise || data.answered) && targetAnswer != null) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
-                onClick = { viewModel.speak(russianAnswer) },
+                onClick = { viewModel.speak(targetAnswer) },
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .testTag("quiz_daily_speak_answer")
@@ -151,7 +156,7 @@ private fun DailyPractice(data: PracticeData, viewModel: PracticeViewModel) {
                 Text(if (isListeningExercise) "Dinlə" else "Düzgün cavabı dinlə")
             }
             TextButton(
-                onClick = { viewModel.speak(russianAnswer, slow = true) },
+                onClick = { viewModel.speak(targetAnswer, slow = true) },
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .testTag("quiz_daily_speak_answer_slow")
@@ -161,7 +166,11 @@ private fun DailyPractice(data: PracticeData, viewModel: PracticeViewModel) {
         }
     }
     question.exercise.options.forEachIndexed { index, option ->
-        val optionSpeech = extractRussianText(option)
+        val optionSpeech = if (question.exercise.type == "Tərcüməni seç") {
+            null
+        } else {
+            extractOptionTargetText(option, data.language)
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -226,7 +235,7 @@ private fun Flashcards(data: PracticeData, viewModel: PracticeViewModel) {
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = "Sözü rusca səsləndir: ${word.russian}"
+                        contentDescription = "Sözü səsləndir: ${word.russian}"
                     )
                 }
                 TextButton(
@@ -238,8 +247,15 @@ private fun Flashcards(data: PracticeData, viewModel: PracticeViewModel) {
                     Text("Yavaş")
                 }
             }
-            if (data.showingBack) WordBack(word, onSpeak = { viewModel.speak(it) })
-            else Text("Tərcüməni görmək üçün karta toxun.")
+            if (data.showingBack) {
+                WordBack(
+                    word = word,
+                    language = data.language,
+                    onSpeak = { viewModel.speak(it) }
+                )
+            } else {
+                Text("Tərcüməni görmək üçün karta toxun.")
+            }
         }
     }
     AppButton(if (data.showingBack) "Tərcüməni gizlət" else "Kartı çevir", viewModel::flipCard)
@@ -262,15 +278,35 @@ private fun Flashcards(data: PracticeData, viewModel: PracticeViewModel) {
 }
 
 @Composable
-private fun WordBack(word: Word, onSpeak: (String) -> Unit) {
+private fun WordBack(
+    word: Word,
+    language: LearningLanguage,
+    onSpeak: (String) -> Unit
+) {
     Text(word.translation, style = MaterialTheme.typography.titleLarge)
     word.gender?.let { Text("Cins: $it") }
-    word.aspectPair?.let { Text("Feil cütü: ${word.russian} — $it") }
-    if (word.gender != null) {
-        Text("Hal cədvəli (tək / cəm):")
-        val cases = flashcardCases[word.russian] ?: generatedFlashcardCases(word.russian)
-        cases.forEach { (case, singular, plural) ->
-            Text("$case: $singular / $plural", style = MaterialTheme.typography.bodySmall)
+    if (language == LearningLanguage.RUSSIAN) {
+        word.aspectPair?.let { Text("Feil cütü: ${word.russian} — $it") }
+        if (word.gender != null) {
+            Text("Hal cədvəli (tək / cəm):")
+            val cases = flashcardCases[word.russian] ?: generatedFlashcardCases(word.russian)
+            cases.forEach { (case, singular, plural) ->
+                Text("$case: $singular / $plural", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    } else if (word.gender != null) {
+        val articleHint = when (language) {
+            LearningLanguage.SPANISH -> if (word.gender == "qadın") "la / una ${word.russian}" else "el / un ${word.russian}"
+            LearningLanguage.FRENCH -> {
+                val startsVowel = word.russian.firstOrNull()?.lowercaseChar() in setOf('a', 'e', 'i', 'o', 'u', 'h', 'é', 'è', 'ê')
+                if (startsVowel) "l' / un(e) ${word.russian}"
+                else if (word.gender == "qadın") "la / une ${word.russian}"
+                else "le / un ${word.russian}"
+            }
+            LearningLanguage.RUSSIAN -> ""
+        }
+        if (articleHint.isNotBlank()) {
+            Text("Artikl: $articleHint", style = MaterialTheme.typography.bodySmall)
         }
     }
     if (word.example.isNotBlank()) {
@@ -298,14 +334,39 @@ private fun WordBack(word: Word, onSpeak: (String) -> Unit) {
 }
 
 private val cyrillicSegmentRegex = Regex("[\\u0400-\\u04FF]+(?:[\\s,.'\"!?-]+[\\u0400-\\u04FF]+)*")
+private val quotedTargetRegex = Regex("«([^»]+)»")
+private val azerbaijaniMarkersRegex = Regex("[əƏıİğĞşŞ]")
 
-private fun extractRussianText(text: String): String? {
-    val matches = cyrillicSegmentRegex.findAll(text)
-        .map { it.value.trim() }
-        .filter { it.isNotBlank() }
+private fun extractTargetText(text: String, language: LearningLanguage): String? {
+    if (language == LearningLanguage.RUSSIAN) {
+        val matches = cyrillicSegmentRegex.findAll(text)
+            .map { it.value.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        if (matches.isEmpty()) return null
+        return matches.joinToString(", ")
+    }
+    val quoted = quotedTargetRegex.findAll(text)
+        .map { it.groupValues[1].trim() }
+        .filter { it.isNotBlank() && !it.contains("___") }
         .toList()
-    if (matches.isEmpty()) return null
-    return matches.joinToString(", ")
+    if (quoted.isNotEmpty()) return quoted.joinToString(", ")
+    val trimmed = text.trim()
+    if (trimmed.isBlank() || azerbaijaniMarkersRegex.containsMatchIn(trimmed) || trimmed.endsWith(":")) {
+        return null
+    }
+    return trimmed
+}
+
+private fun extractOptionTargetText(option: String, language: LearningLanguage): String? {
+    if (language == LearningLanguage.RUSSIAN) {
+        return extractTargetText(option, language)
+    }
+    val trimmed = option.trim()
+    if (trimmed.isBlank() || azerbaijaniMarkersRegex.containsMatchIn(trimmed)) {
+        return null
+    }
+    return trimmed
 }
 
 private val flashcardCases = mapOf(

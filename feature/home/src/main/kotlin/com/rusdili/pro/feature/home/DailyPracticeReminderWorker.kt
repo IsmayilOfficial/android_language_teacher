@@ -43,8 +43,10 @@ class DailyPracticeReminderWorker @AssistedInject constructor(
         }
 
         val now = System.currentTimeMillis()
-        val dueWords = wordDao.dueForReview(now, 100)
-        val recentSessions = reviewSessionDao.observeAll().first()
+        val langCode = progress.language.code
+        val langLabel = progress.language.displayNameAz.lowercase()
+        val dueWords = wordDao.dueForReview(langCode, now, 100)
+        val recentSessions = reviewSessionDao.observeByLanguage(langCode).first()
         val completedReviewToday = recentSessions.any { isSameDay(it.completedAt, now) }
 
         if (!forceShow &&
@@ -65,16 +67,16 @@ class DailyPracticeReminderWorker @AssistedInject constructor(
         val (title, body) = when {
             dueWords.isNotEmpty() && !completedReviewToday ->
                 "Təkrar sessiyası gözləyir! (${dueWords.size} söz)" to
-                    "Bu gün təkrar edilməli ${dueWords.size} rusca sözün var. Qısa təkrar sessiyası ilə yaddaşını möhkəmləndir!"
+                    "Bu gün $langLabel üzrə təkrar edilməli ${dueWords.size} sözün var. Qısa təkrar sessiyası ilə yaddaşını möhkəmləndir!"
             !completedReviewToday && progress.streak > 0 ->
                 "${progress.streak} günlük seriyanı qoru!" to
-                    "Bugünkü dil təkrar sessiyanı hələ tamamlamamısan. Qısa test və ya kartlarla məşqə başla!"
+                    "Bugünkü $langLabel təkrar sessiyanı hələ tamamlamamısan. Qısa test və ya kartlarla məşqə başla!"
             !completedReviewToday || progress.xpToday < AppConstants.DAILY_GOAL_XP ->
                 "Gündəlik dil təkrarı vaxtıdır!" to
-                    "Bugünkü hədəfə çatmaq üçün $remainingXp XP qalıb. Təkrar sessiyasına başla və irəliləyişini artır!"
+                    "Bugünkü $langLabel hədəfinə çatmaq üçün $remainingXp XP qalıb. Təkrar sessiyasına başla!"
             else ->
                 "LL - Learn Language · Təkrar xatırlatması" to
-                    "Gündəlik xatırlatma saat %02d:%02d üçün aktivdir. Bugünkü ${progress.xpToday} XP və təkrar sessiyan tamamlanıb!"
+                    "Gündəlik xatırlatma saat %02d:%02d üçün aktivdir. Bugünkü ${progress.xpToday} XP ($langLabel) tamamlanıb!"
                         .format(progress.reminderHour, progress.reminderMinute)
         }
 
@@ -137,7 +139,7 @@ class DailyPracticeReminderWorker @AssistedInject constructor(
                 "Gündəlik məşq xatırlatması",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Gündəlik rus dili təkrar sessiyaları və seriyanı qorumaq üçün xatırlatmalar"
+                description = "Gündəlik dil təkrar sessiyaları və seriyanı qorumaq üçün xatırlatmalar"
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)

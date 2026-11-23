@@ -17,11 +17,20 @@ import kotlinx.coroutines.flow.map
 class RoomCourseRepository @Inject constructor(
     private val dao: ChapterProgressDao
 ) : CourseRepository {
-    override fun observeScores(): Flow<List<ChapterScore>> =
-        dao.observeAll().map { rows -> rows.map { ChapterScore(it.chapterId, it.scorePercent) } }
+    override fun observeScores(language: String): Flow<List<ChapterScore>> =
+        dao.observeByLanguage(language).map { rows ->
+            rows.map { ChapterScore(it.chapterId, it.scorePercent) }
+        }
 
-    override suspend fun saveScore(chapterId: Int, scorePercent: Int) {
-        dao.save(ChapterProgressEntity(chapterId, scorePercent, System.currentTimeMillis()))
+    override suspend fun saveScore(language: String, chapterId: Int, scorePercent: Int) {
+        dao.save(
+            ChapterProgressEntity(
+                language = language,
+                chapterId = chapterId,
+                scorePercent = scorePercent,
+                completedAt = System.currentTimeMillis()
+            )
+        )
     }
 }
 

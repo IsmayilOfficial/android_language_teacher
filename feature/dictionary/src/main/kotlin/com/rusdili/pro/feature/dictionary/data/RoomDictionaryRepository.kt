@@ -1,6 +1,7 @@
 package com.rusdili.pro.feature.dictionary.data
 
 import com.rusdili.pro.core.common.AppConstants
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.SearchHistoryEntry
 import com.rusdili.pro.core.common.Word
 import com.rusdili.pro.core.database.SearchHistoryDao
@@ -23,27 +24,36 @@ class RoomDictionaryRepository @Inject constructor(
     private val dao: WordDao,
     private val searchHistoryDao: SearchHistoryDao
 ) : DictionaryRepository {
-    override fun search(query: String): Flow<List<Word>> =
-        dao.search(query.trim()).map { rows -> rows.map(WordEntity::toDomain) }
+    override fun search(language: LearningLanguage, query: String): Flow<List<Word>> =
+        dao.search(language.code, query.trim()).map { rows -> rows.map(WordEntity::toDomain) }
 
-    override fun favorites(): Flow<List<Word>> =
-        dao.observeFavorites().map { rows -> rows.map(WordEntity::toDomain) }
+    override fun favorites(language: LearningLanguage): Flow<List<Word>> =
+        dao.observeFavorites(language.code).map { rows -> rows.map(WordEntity::toDomain) }
 
-    override suspend fun setFavorite(word: String, favorite: Boolean) {
-        dao.setFavorite(word, favorite)
+    override suspend fun setFavorite(language: LearningLanguage, word: String, favorite: Boolean) {
+        dao.setFavorite(language.code, word, favorite)
     }
 
-    override fun recentSearches(limit: Int): Flow<List<SearchHistoryEntry>> =
-        searchHistoryDao.observeRecent(limit).map { rows -> rows.map(SearchHistoryEntity::toDomain) }
+    override fun recentSearches(
+        language: LearningLanguage,
+        limit: Int
+    ): Flow<List<SearchHistoryEntry>> =
+        searchHistoryDao.observeRecent(language.code, limit)
+            .map { rows -> rows.map(SearchHistoryEntity::toDomain) }
 
-    override suspend fun recordSearch(query: String, matchedWord: Word?) {
+    override suspend fun recordSearch(
+        language: LearningLanguage,
+        query: String,
+        matchedWord: Word?
+    ) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return
         val normalizedKey = (matchedWord?.russian ?: trimmed).lowercase(Locale.ROOT)
         val display = matchedWord?.russian ?: trimmed
-        val exactWord = matchedWord ?: dao.findByRussian(trimmed)?.toDomain()
+        val exactWord = matchedWord ?: dao.findByRussian(language.code, trimmed)?.toDomain()
         searchHistoryDao.upsert(
             SearchHistoryEntity(
+                language = language.code,
                 queryKey = normalizedKey,
                 displayQuery = display,
                 matchedRussian = exactWord?.russian,
@@ -51,15 +61,15 @@ class RoomDictionaryRepository @Inject constructor(
                 searchedAt = System.currentTimeMillis()
             )
         )
-        searchHistoryDao.trimToLimit(AppConstants.MAX_SEARCH_HISTORY)
+        searchHistoryDao.trimToLimit(language.code, AppConstants.MAX_SEARCH_HISTORY)
     }
 
-    override suspend fun removeSearchHistoryEntry(queryKey: String) {
-        searchHistoryDao.deleteByKey(queryKey)
+    override suspend fun removeSearchHistoryEntry(language: LearningLanguage, queryKey: String) {
+        searchHistoryDao.deleteByKey(language.code, queryKey)
     }
 
-    override suspend fun clearSearchHistory() {
-        searchHistoryDao.clearAll()
+    override suspend fun clearSearchHistory(language: LearningLanguage) {
+        searchHistoryDao.clearAll(language.code)
     }
 }
 
@@ -71,7 +81,8 @@ private fun WordEntity.toDomain() = Word(
     aspectPair = aspectPair,
     isFavorite = isFavorite,
     nextReviewDate = nextReviewDate,
-    reviewStage = reviewStage
+    reviewStage = reviewStage,
+    language = language
 )
 
 private fun SearchHistoryEntity.toDomain() = SearchHistoryEntry(
@@ -79,7 +90,8 @@ private fun SearchHistoryEntity.toDomain() = SearchHistoryEntry(
     query = displayQuery,
     matchedRussian = matchedRussian,
     matchedTranslation = matchedTranslation,
-    searchedAt = searchedAt
+    searchedAt = searchedAt,
+    language = language
 )
 
 @Module

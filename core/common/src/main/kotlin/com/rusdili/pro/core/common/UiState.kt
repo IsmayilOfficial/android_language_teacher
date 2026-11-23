@@ -14,7 +14,8 @@ data class Word(
     val aspectPair: String? = null,
     val isFavorite: Boolean = false,
     val nextReviewDate: Long = 0L,
-    val reviewStage: Int = 0
+    val reviewStage: Int = 0,
+    val language: String = LearningLanguage.RUSSIAN.code
 )
 
 data class NewsItem(
@@ -34,7 +35,8 @@ data class FlashcardDeck(
     val name: String,
     val description: String = "",
     val words: List<Word> = emptyList(),
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val language: String = LearningLanguage.RUSSIAN.code
 )
 
 data class SearchHistoryEntry(
@@ -42,7 +44,8 @@ data class SearchHistoryEntry(
     val query: String,
     val matchedRussian: String? = null,
     val matchedTranslation: String? = null,
-    val searchedAt: Long = 0L
+    val searchedAt: Long = 0L,
+    val language: String = LearningLanguage.RUSSIAN.code
 )
 
 enum class ReviewSessionType { DAILY_QUIZ, FLASHCARD_REVIEW }
@@ -53,7 +56,8 @@ data class ReviewSession(
     val totalItems: Int,
     val successfulItems: Int,
     val xpEarned: Int,
-    val completedAt: Long
+    val completedAt: Long,
+    val language: String = LearningLanguage.RUSSIAN.code
 ) {
     val accuracyPercent: Int
         get() = if (totalItems > 0) ((successfulItems * 100f) / totalItems).toInt() else 0

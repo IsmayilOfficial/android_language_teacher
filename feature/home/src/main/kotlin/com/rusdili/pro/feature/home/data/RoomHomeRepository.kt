@@ -1,5 +1,6 @@
 package com.rusdili.pro.feature.home.data
 
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.NewsItem
 import com.rusdili.pro.core.database.ChapterProgressDao
 import com.rusdili.pro.core.database.NewsDao
@@ -22,10 +23,17 @@ class RoomHomeRepository @Inject constructor(
     private val newsDao: NewsDao,
     private val chapterProgressDao: ChapterProgressDao
 ) : HomeRepository {
-    override fun observeSummary(): Flow<HomeSummary> = combine(
-        wordDao.observeAll(), newsDao.observeAll(), chapterProgressDao.observeAll()
+    override fun observeSummary(language: LearningLanguage): Flow<HomeSummary> = combine(
+        wordDao.observeAll(language.code),
+        newsDao.observeAll(),
+        chapterProgressDao.observeByLanguage(language.code)
     ) { words, news, progress ->
-        val word = words.firstOrNull { it.russian == "книга" }
+        val (featuredWord, fallbackTranslation, fallbackExample) = when (language) {
+            LearningLanguage.RUSSIAN -> Triple("книга", "kitab", "Я читаю книгу.")
+            LearningLanguage.SPANISH -> Triple("libro", "kitab", "Leo un libro interesante.")
+            LearningLanguage.FRENCH -> Triple("livre", "kitab", "Je lis un bon livre.")
+        }
+        val word = words.firstOrNull { it.russian == featuredWord } ?: words.firstOrNull()
         val latestNews = news.firstOrNull()?.let {
             NewsItem(
                 it.id, it.titleAz, it.summaryAz, it.original, it.source,
@@ -33,18 +41,32 @@ class RoomHomeRepository @Inject constructor(
             )
         }
         val completed = progress.associate { it.chapterId to it.scorePercent }
-        val lessonTitles = listOf(
+        val lessonTitles = lessonTitlesFor(language)
+        val nextId = (1..15).firstOrNull { (completed[it] ?: 0) < 80 } ?: 15
+        HomeSummary(
+            wordRussian = word?.russian ?: featuredWord,
+            wordTranslation = word?.translation ?: fallbackTranslation,
+            example = word?.example ?: fallbackExample,
+            latestNews = latestNews,
+            nextLesson = "$nextId-ci fəsil: ${lessonTitles[nextId - 1]}"
+        )
+    }
+
+    private fun lessonTitlesFor(language: LearningLanguage): List<String> = when (language) {
+        LearningLanguage.RUSSIAN -> listOf(
             "Əlifba", "Vurğu və reduksiya", "İsim və Cins", "6 Hal", "Sifət",
             "Əvəzliklər", "Saylar", "Feilin Növü", "Feil Zamanları", "Hərəkət Feilləri",
             "Qayıdış Feilləri", "Əmr və Şərt", "Feili Sifət və Feili Zərf", "Sintaksis", "Orfoqrafiya"
         )
-        val nextId = (1..15).firstOrNull { (completed[it] ?: 0) < 80 } ?: 15
-        HomeSummary(
-            wordRussian = word?.russian ?: "книга",
-            wordTranslation = word?.translation ?: "kitab",
-            example = word?.example ?: "Я читаю книгу.",
-            latestNews = latestNews,
-            nextLesson = "$nextId-ci fəsil: ${lessonTitles[nextId - 1]}"
+        LearningLanguage.SPANISH -> listOf(
+            "Əlifba və tələffüz", "Artikl və cins", "Ser və Estar", "İndiki zaman", "Rəqəmlər və saat",
+            "Ailə və dostlar", "Gündəlik həyat", "Keçmiş zaman", "Gələcək zaman", "Sifətlər",
+            "Əvəzliklər", "Suallar", "Kafe və restoran", "Səyahət", "B1 Təkrar"
+        )
+        LearningLanguage.FRENCH -> listOf(
+            "Əlifba və tələffüz", "Artikl və cins", "Être və Avoir", "İndiki zaman", "Rəqəmlər və saat",
+            "Ailə və dostlar", "Gündəlik həyat", "Passé Composé", "Gələcək zaman", "Sifətlər",
+            "Əvəzliklər", "Suallar", "Kafe və restoran", "Səyahət", "B1 Təkrar"
         )
     }
 }

@@ -9,16 +9,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rusdili.pro.core.common.AppConstants
+import com.rusdili.pro.core.common.LearningLanguage
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -32,7 +36,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val darkThemePreference by themeViewModel.darkThemePreference.collectAsStateWithLifecycle()
+            val languageState by themeViewModel.languagePreferenceState.collectAsStateWithLifecycle()
             val isDarkTheme = darkThemePreference ?: isSystemInDarkTheme()
+            val activeLanguage = (languageState as? LanguagePreferenceState.Ready)
+                ?.selectedLanguage
+                ?: LearningLanguage.RUSSIAN
 
             DisposableEffect(isDarkTheme) {
                 enableEdgeToEdge(
@@ -48,17 +56,43 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
 
-            RusDiliTheme(darkTheme = isDarkTheme) {
+            RusDiliTheme(
+                language = activeLanguage,
+                darkTheme = isDarkTheme
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    RusDiliNavigation(
-                        isDarkTheme = isDarkTheme,
-                        onToggleTheme = { themeViewModel.toggleTheme(isDarkTheme) },
-                        pendingDestination = pendingDestination,
-                        onDestinationConsumed = { pendingDestination = null }
-                    )
+                    when (val current = languageState) {
+                        LanguagePreferenceState.Loading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        is LanguagePreferenceState.Ready -> {
+                            val selected = current.selectedLanguage
+                            if (selected == null) {
+                                LanguagePickerScreen(
+                                    onConfirmLanguage = themeViewModel::selectLanguage,
+                                    onSpeakGreeting = themeViewModel::previewGreeting
+                                )
+                            } else {
+                                RusDiliNavigation(
+                                    selectedLanguage = selected,
+                                    isDarkTheme = isDarkTheme,
+                                    onToggleTheme = { themeViewModel.toggleTheme(isDarkTheme) },
+                                    onSelectLanguage = themeViewModel::selectLanguage,
+                                    onSpeakGreeting = themeViewModel::previewGreeting,
+                                    pendingDestination = pendingDestination,
+                                    onDestinationConsumed = { pendingDestination = null }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

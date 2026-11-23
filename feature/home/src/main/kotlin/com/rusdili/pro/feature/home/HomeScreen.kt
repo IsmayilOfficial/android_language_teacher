@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
@@ -35,6 +36,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -64,12 +66,14 @@ import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.ui.AppButton
 import com.rusdili.pro.core.ui.NewsCard
 import com.rusdili.pro.core.ui.ProgressBar
+import com.rusdili.pro.core.ui.SovaMascotCard
 
 @Composable
 fun HomeScreen(
     onBook: () -> Unit,
     onPractice: () -> Unit,
     onNews: () -> Unit,
+    onOpenLanguageSettings: (() -> Unit)? = null,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     LaunchedEffect(Unit) {
@@ -86,6 +90,9 @@ fun HomeScreen(
             onToggleReminder = viewModel::setDailyReminder,
             onSelectReminderTime = viewModel::updateReminderTime,
             onTestReminder = viewModel::sendTestReminderNotification,
+            onSpeakMascotGreeting = viewModel::speakMascotGreeting,
+            onSpeakWord = viewModel::speakWordOfTheDay,
+            onOpenLanguageSettings = onOpenLanguageSettings,
             onBook = onBook,
             onPractice = onPractice,
             onNews = onNews
@@ -100,6 +107,9 @@ private fun HomeContent(
     onToggleReminder: (Boolean, Int, Int) -> Unit,
     onSelectReminderTime: (Int, Int) -> Unit,
     onTestReminder: () -> Unit,
+    onSpeakMascotGreeting: () -> Unit,
+    onSpeakWord: (String) -> Unit,
+    onOpenLanguageSettings: (() -> Unit)?,
     onBook: () -> Unit,
     onPractice: () -> Unit,
     onNews: () -> Unit
@@ -122,7 +132,7 @@ private fun HomeContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Bugünkü rus dili hədəfin və nailiyyətlərin",
+                    text = "Bugünkü ${data.language.displayNameAz.lowercase()} hədəfin və nailiyyətlərin",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -164,6 +174,12 @@ private fun HomeContent(
                 }
             }
         }
+
+        SovaMascotCard(
+            language = data.language,
+            onSpeakGreeting = onSpeakMascotGreeting,
+            onChangeLanguage = onOpenLanguageSettings
+        )
 
         DailyStreakCard(
             streak = data.streak,
@@ -217,7 +233,25 @@ private fun HomeContent(
         }
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Günün sözü", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Günün sözü", style = MaterialTheme.typography.titleMedium)
+                    IconButton(
+                        onClick = { onSpeakWord(data.wordRussian) },
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("home_word_speak")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Günün sözünü səsləndir: ${data.wordRussian}",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 Text(data.wordRussian, style = MaterialTheme.typography.headlineSmall)
                 Text(data.wordTranslation)
                 Text(data.example, style = MaterialTheme.typography.bodyLarge)

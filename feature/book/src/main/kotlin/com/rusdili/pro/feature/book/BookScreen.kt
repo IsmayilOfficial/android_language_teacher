@@ -80,7 +80,10 @@ private fun BookContent(data: BookData, viewModel: BookViewModel) {
                 Modifier.fillMaxWidth().padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(token.trim('.', ',', '!', '?', ':', ';', '"', '«', '»'), fontWeight = FontWeight.Bold)
+                Text(
+                    token.trim('.', ',', '!', '?', ':', ';', '"', '«', '»', '¡', '¿'),
+                    fontWeight = FontWeight.Bold
+                )
                 if (data.lookupLoading) {
                     CircularProgressIndicator()
                 } else {
@@ -98,7 +101,7 @@ private fun ChapterList(data: BookData, viewModel: BookViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("İnteraktiv kitab", style = MaterialTheme.typography.headlineMedium)
+        Text("İnteraktiv kitab · ${data.language.displayNameAz}", style = MaterialTheme.typography.headlineMedium)
         Text("Növbəti fəsil əvvəlkinin yekun testindən ən azı 80% topladıqda açılır.")
         data.chapters.forEach { row ->
             Card(
@@ -152,7 +155,10 @@ private fun ChapterContent(
                             }
                         }
                         IconButton(onClick = { viewModel.speak(example.russian) }) {
-                            Icon(Icons.Default.VolumeUp, contentDescription = "Rusca səsləndir")
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = "${data.language.displayNameAz} səsləndir"
+                            )
                         }
                     }
                     Text(example.azerbaijani)

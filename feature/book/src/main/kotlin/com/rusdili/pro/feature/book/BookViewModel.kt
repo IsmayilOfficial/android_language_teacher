@@ -2,9 +2,10 @@ package com.rusdili.pro.feature.book
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.common.AppConstants
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.RussianSpeech
+import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.common.UserProgressStore
 import com.rusdili.pro.feature.book.domain.BookWordRepository
 import com.rusdili.pro.feature.book.domain.CourseRepository
@@ -12,16 +13,19 @@ import com.rusdili.pro.feature.book.domain.SaveChapterScoreUseCase
 import com.rusdili.pro.feature.book.domain.WordLookup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class ChapterRow(val chapter: Chapter, val score: Int, val locked: Boolean)
 
 data class BookData(
-    val chapters: List<ChapterRow>,
+    val language: LearningLanguage = LearningLanguage.RUSSIAN,
+    val chapters: List<ChapterRow> = emptyList(),
     val selectedChapterId: Int? = null,
     val selectedLessonIndex: Int? = null,
     val exerciseIndex: Int = 0,
@@ -40,6 +44,7 @@ data class BookData(
     val lessonScore: Int get() = correctAnswers * 20
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BookViewModel @Inject constructor(
     repository: CourseRepository,
@@ -53,22 +58,29 @@ class BookViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.observeScores().collect { scores ->
-                val scoreById = scores.associate { it.chapterId to it.scorePercent }
-                val rows = chapters.map { chapter ->
-                    val score = scoreById[chapter.id] ?: 0
-                    ChapterRow(
-                        chapter = chapter,
-                        score = score,
-                        locked = chapter.id > 1 &&
-                            (scoreById[chapter.id - 1] ?: 0) < AppConstants.CHAPTER_PASS_PERCENT
-                    )
+            progressStore.selectedLanguage
+                .flatMapLatest { language ->
+                    repository.observeScores(language.code).map { scores -> language to scores }
                 }
-                val current = (_uiState.value as? UiState.Success)?.data
-                _uiState.value = UiState.Success(
-                    (current ?: BookData(rows)).copy(chapters = rows)
-                )
-            }
+                .collect { (language, scores) ->
+                    val scoreById = scores.associate { it.chapterId to it.scorePercent }
+                    val rows = CourseCatalog.chaptersFor(language).map { chapter ->
+                        val score = scoreById[chapter.id] ?: 0
+                        ChapterRow(
+                            chapter = chapter,
+                            score = score,
+                            locked = chapter.id > 1 &&
+                                (scoreById[chapter.id - 1] ?: 0) < AppConstants.CHAPTER_PASS_PERCENT
+                        )
+                    }
+                    val current = (_uiState.value as? UiState.Success)?.data
+                    val languageChanged = current != null && current.language != language
+                    _uiState.value = if (current == null || languageChanged) {
+                        UiState.Success(BookData(language = language, chapters = rows))
+                    } else {
+                        UiState.Success(current.copy(language = language, chapters = rows))
+                    }
+                }
         }
     }
 
@@ -122,7 +134,7 @@ class BookViewModel @Inject constructor(
             viewModelScope.launch { progressStore.markLessonCompleted() }
             if (data.selectedLessonIndex == 3 && data.selectedChapterId != null) {
                 viewModelScope.launch {
-                    saveScore(data.selectedChapterId, data.lessonScore)
+                    saveScore(data.language.code, data.selectedChapterId, data.lessonScore)
                 }
             }
         } else {
@@ -148,12 +160,16 @@ class BookViewModel @Inject constructor(
         }
     }
 
-    fun speak(text: String) = speech.speak(text)
+    fun speak(text: String) {
+        val language = (_uiState.value as? UiState.Success)?.data?.language
+        speech.speak(text, language = language)
+    }
 
     fun lookupWord(token: String) {
+        val language = (_uiState.value as? UiState.Success)?.data?.language ?: LearningLanguage.RUSSIAN
         updateData { it.copy(lookupToken = token, wordLookup = null, lookupLoading = true) }
         viewModelScope.launch {
-            val result = wordRepository.lookup(token)
+            val result = wordRepository.lookup(token, language)
             updateData { data ->
                 if (data.lookupToken == token) data.copy(wordLookup = result, lookupLoading = false)
                 else data

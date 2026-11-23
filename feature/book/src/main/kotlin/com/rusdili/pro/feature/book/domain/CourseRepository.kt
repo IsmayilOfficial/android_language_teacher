@@ -5,12 +5,12 @@ import kotlinx.coroutines.flow.Flow
 data class ChapterScore(val chapterId: Int, val scorePercent: Int)
 
 interface CourseRepository {
-    fun observeScores(): Flow<List<ChapterScore>>
-    suspend fun saveScore(chapterId: Int, scorePercent: Int)
+    fun observeScores(language: String): Flow<List<ChapterScore>>
+    suspend fun saveScore(language: String, chapterId: Int, scorePercent: Int)
 }
 
 class SaveChapterScoreUseCase(private val repository: CourseRepository) {
-    suspend operator fun invoke(chapterId: Int, scorePercent: Int) {
-        repository.saveScore(chapterId, scorePercent)
+    suspend operator fun invoke(language: String, chapterId: Int, scorePercent: Int) {
+        repository.saveScore(language, chapterId, scorePercent)
     }
 }

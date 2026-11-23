@@ -1,30 +1,45 @@
 package com.rusdili.pro.core.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.NewsItem
 
 @Composable
@@ -35,6 +50,128 @@ fun AppLogo(modifier: Modifier = Modifier, size: Dp = 36.dp) {
         contentScale = ContentScale.Crop,
         modifier = modifier.size(size).clip(RoundedCornerShape(10.dp))
     )
+}
+
+@Composable
+fun SovaMascotAvatar(
+    language: LearningLanguage,
+    size: Dp = 80.dp,
+    modifier: Modifier = Modifier
+) {
+    val drawableRes = when (language) {
+        LearningLanguage.RUSSIAN -> R.drawable.mascot_sova_ru
+        LearningLanguage.SPANISH -> R.drawable.mascot_sova_es
+        LearningLanguage.FRENCH -> R.drawable.mascot_sova_fr
+    }
+    val mascotDescription = when (language) {
+        LearningLanguage.RUSSIAN -> "Sova maskotu — qulaqlıqlı mavi bayquş"
+        LearningLanguage.SPANISH -> "Sova maskotu — qırmızı şlyapalı sarı bayquş"
+        LearningLanguage.FRENCH -> "Sova maskotu — beretli bənövşəyi bayquş"
+    }
+    Image(
+        painter = painterResource(id = drawableRes),
+        contentDescription = mascotDescription,
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White)
+    )
+}
+
+@Composable
+fun SovaMascotCard(
+    language: LearningLanguage,
+    onSpeakGreeting: () -> Unit,
+    onChangeLanguage: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val subtitle = when (language) {
+        LearningLanguage.RUSSIAN -> "Sova səninlə rus dilini öyrənir"
+        LearningLanguage.SPANISH -> "Sova səninlə ispan dilini öyrənir"
+        LearningLanguage.FRENCH -> "Sova səninlə fransız dilini öyrənir"
+    }
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("home_sova_mascot_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SovaMascotAvatar(
+                language = language,
+                size = 86.dp,
+                modifier = Modifier.testTag("sova_mascot_image")
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Text(
+                            text = language.greeting,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .testTag("sova_greeting_text")
+                        )
+                    }
+                    IconButton(
+                        onClick = onSpeakGreeting,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("mascot_speak_greeting")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "${language.displayNameAz} salamlaşmasını səsləndir",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Text(
+                    text = "${language.displayNameAz} · ${language.nativeName}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (onChangeLanguage != null) {
+                    OutlinedButton(
+                        onClick = onChangeLanguage,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("mascot_switch_language_button")
+                    ) {
+                        Text("Dili dəyiş")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

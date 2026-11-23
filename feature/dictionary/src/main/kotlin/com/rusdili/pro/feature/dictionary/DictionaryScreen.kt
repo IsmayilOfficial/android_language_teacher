@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.UiState
 import com.rusdili.pro.core.common.Word
 
@@ -59,9 +60,9 @@ fun DictionaryScreen(viewModel: DictionaryViewModel = hiltViewModel()) {
 
 @Composable
 private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewModel) {
-    var selectedWord by remember { mutableStateOf<Word?>(null) }
-    var wordToAddToDeck by remember { mutableStateOf<Word?>(null) }
-    var activeReviewDeckId by remember { mutableStateOf<Long?>(null) }
+    var selectedWord by remember(data.language) { mutableStateOf<Word?>(null) }
+    var wordToAddToDeck by remember(data.language) { mutableStateOf<Word?>(null) }
+    var activeReviewDeckId by remember(data.language) { mutableStateOf<Long?>(null) }
 
     val activeReviewDeck = activeReviewDeckId?.let { id -> data.decks.firstOrNull { it.id == id } }
     if (activeReviewDeck != null) {
@@ -78,17 +79,22 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Lüğət", style = MaterialTheme.typography.headlineMedium)
-        val hasCyrillicQuery = remember(data.query) { containsCyrillic(data.query) }
+        Text("Lüğət · ${data.language.displayNameAz}", style = MaterialTheme.typography.headlineMedium)
+        val hasSpeakableQuery = remember(data.query) { data.query.trim().isNotEmpty() }
+        val searchLabel = when (data.language) {
+            LearningLanguage.RUSSIAN -> "Rusca və ya azərbaycanca axtar"
+            LearningLanguage.SPANISH -> "İspanca və ya azərbaycanca axtar"
+            LearningLanguage.FRENCH -> "Fransızca və ya azərbaycanca axtar"
+        }
         OutlinedTextField(
             value = data.query,
             onValueChange = viewModel::search,
-            label = { Text("Rusca və ya azərbaycanca axtar") },
+            label = { Text(searchLabel) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
                 if (data.query.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (hasCyrillicQuery) {
+                        if (hasSpeakableQuery) {
                             IconButton(
                                 onClick = { viewModel.speak(data.query) },
                                 modifier = Modifier
@@ -124,7 +130,7 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
         )
         if (!data.isSpeechAvailable) {
             Text(
-                text = "Qeyd: Bu cihazda rus dili səs paketi aktiv deyil.",
+                text = "Qeyd: Bu cihazda ${data.language.displayNameAz.lowercase()} səs paketi aktiv deyil.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.testTag("dict_tts_unavailable_notice")
@@ -202,7 +208,7 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                     )
                 }
                 if (data.words.isEmpty()) {
-                    if (data.section == DictionarySection.ALL && hasCyrillicQuery) {
+                    if (data.section == DictionarySection.ALL && hasSpeakableQuery) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -265,7 +271,7 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Sözü rusca səsləndir: ${word.russian}",
+                                contentDescription = "Sözü səsləndir: ${word.russian}",
                                 tint = if (isWordSpeaking) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -338,7 +344,7 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Sözü rusca səsləndir: ${word.russian}"
+                                contentDescription = "Sözü səsləndir: ${word.russian}"
                             )
                         }
                         TextButton(
@@ -358,14 +364,36 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("Tərcümə: ${word.translation}")
-                    if (word.aspectPair != null) {
-                        Text("Feil növü və cütü: ${word.russian} — ${word.aspectPair}")
-                        VerbTenses(word)
-                    } else if (word.gender != null) {
-                        Text("Cins: ${word.gender}")
-                        CaseTable(word.russian, word.gender)
-                    } else {
-                        Text("Bu söz üçün cins və hal cədvəli tətbiq edilmir.")
+                    when (data.language) {
+                        LearningLanguage.RUSSIAN -> {
+                            if (word.aspectPair != null) {
+                                Text("Feil növü və cütü: ${word.russian} — ${word.aspectPair}")
+                                VerbTenses(word)
+                            } else if (word.gender != null) {
+                                Text("Cins: ${word.gender}")
+                                CaseTable(word.russian, word.gender)
+                            } else {
+                                Text("Bu söz üçün cins və hal cədvəli tətbiq edilmir.")
+                            }
+                        }
+                        LearningLanguage.SPANISH -> {
+                            word.gender?.let { gender ->
+                                val article = when (gender) {
+                                    "kişi" -> "el ${word.russian} / un ${word.russian}"
+                                    "qadın" -> "la ${word.russian} / una ${word.russian}"
+                                    else -> word.russian
+                                }
+                                Text("Cins: $gender ($article)")
+                            } ?: Text("İspan dilində feil və ya dəyişməyən nitq hissəsi.")
+                        }
+                        LearningLanguage.FRENCH -> {
+                            word.gender?.let { gender ->
+                                val startsVowel = word.russian.firstOrNull()?.lowercaseChar() in setOf('a', 'e', 'i', 'o', 'u', 'h', 'é', 'è', 'ê')
+                                val defArticle = if (startsVowel) "l'${word.russian}" else if (gender == "qadın") "la ${word.russian}" else "le ${word.russian}"
+                                val indefArticle = if (gender == "qadın") "une ${word.russian}" else "un ${word.russian}"
+                                Text("Cins: $gender ($defArticle / $indefArticle)")
+                            } ?: Text("Fransız dilində feil və ya dəyişməyən nitq hissəsi.")
+                        }
                     }
                     if (word.example.isNotBlank()) {
                         Row(
@@ -667,7 +695,3 @@ private fun generatedCaseForms(word: String, gender: String?): List<Triple<Strin
     }
     return names.indices.map { index -> Triple(names[index], singular[index], plural[index]) }
 }
-
-private val cyrillicCharRegex = Regex("[\\u0400-\\u04FF]")
-
-private fun containsCyrillic(text: String): Boolean = cyrillicCharRegex.containsMatchIn(text)

@@ -1,5 +1,6 @@
 package com.rusdili.pro.feature.home.domain
 
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.NewsItem
 import kotlinx.coroutines.flow.Flow
 
@@ -12,9 +13,9 @@ data class HomeSummary(
 )
 
 interface HomeRepository {
-    fun observeSummary(): Flow<HomeSummary>
+    fun observeSummary(language: LearningLanguage): Flow<HomeSummary>
 }
 
 class GetHomeSummaryUseCase(private val repository: HomeRepository) {
-    operator fun invoke(): Flow<HomeSummary> = repository.observeSummary()
+    operator fun invoke(language: LearningLanguage): Flow<HomeSummary> = repository.observeSummary(language)
 }

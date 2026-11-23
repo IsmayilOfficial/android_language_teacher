@@ -21,8 +21,10 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -34,6 +36,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +58,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.ui.AppLogo
 import com.rusdili.pro.feature.book.BookScreen
 import com.rusdili.pro.feature.dictionary.DictionaryScreen
@@ -77,8 +83,11 @@ private val tabs = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RusDiliNavigation(
+    selectedLanguage: LearningLanguage,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
+    onSelectLanguage: (LearningLanguage) -> Unit,
+    onSpeakGreeting: (LearningLanguage) -> Unit,
     pendingDestination: String? = null,
     onDestinationConsumed: () -> Unit = {}
 ) {
@@ -88,6 +97,7 @@ fun RusDiliNavigation(
     val currentTab = tabs.firstOrNull { tab ->
         currentDestination?.hierarchy?.any { it.route == tab.route } == true
     }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(pendingDestination) {
         val target = pendingDestination ?: return@LaunchedEffect
@@ -124,14 +134,16 @@ fun RusDiliNavigation(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            currentTab?.let { tab ->
-                                Text(
-                                    text = tab.label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
+                            Text(
+                                text = listOfNotNull(
+                                    currentTab?.label,
+                                    selectedLanguage.displayNameAz
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 },
@@ -139,8 +151,20 @@ fun RusDiliNavigation(
                     ThemeTogglePill(
                         isDarkTheme = isDarkTheme,
                         onToggle = onToggleTheme,
-                        modifier = Modifier.padding(end = 12.dp)
+                        modifier = Modifier.padding(end = 4.dp)
                     )
+                    IconButton(
+                        onClick = { showSettingsDialog = true },
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .minimumInteractiveComponentSize()
+                            .testTag("global_settings_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Ayarlar və dil seçimi"
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -183,7 +207,8 @@ fun RusDiliNavigation(
                 HomeScreen(
                     onBook = { navController.navigate("book") },
                     onPractice = { navController.navigate("practice") },
-                    onNews = { navController.navigate("news") }
+                    onNews = { navController.navigate("news") },
+                    onOpenLanguageSettings = { showSettingsDialog = true }
                 )
             }
             composable("book") { BookScreen() }
@@ -191,6 +216,17 @@ fun RusDiliNavigation(
             composable("dictionary") { DictionaryScreen() }
             composable("news") { NewsScreen() }
         }
+    }
+
+    if (showSettingsDialog) {
+        SettingsDialog(
+            currentLanguage = selectedLanguage,
+            isDarkTheme = isDarkTheme,
+            onSelectLanguage = onSelectLanguage,
+            onToggleTheme = onToggleTheme,
+            onSpeakGreeting = onSpeakGreeting,
+            onDismiss = { showSettingsDialog = false }
+        )
     }
 }
 

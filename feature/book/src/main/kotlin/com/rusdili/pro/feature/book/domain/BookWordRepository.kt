@@ -1,5 +1,6 @@
 package com.rusdili.pro.feature.book.domain
 
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.Word
 
 data class WordLookup(
@@ -9,5 +10,5 @@ data class WordLookup(
 )
 
 interface BookWordRepository {
-    suspend fun lookup(token: String): WordLookup
+    suspend fun lookup(token: String, language: LearningLanguage): WordLookup
 }

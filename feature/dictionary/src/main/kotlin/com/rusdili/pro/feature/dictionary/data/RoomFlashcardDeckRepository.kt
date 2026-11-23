@@ -1,6 +1,7 @@
 package com.rusdili.pro.feature.dictionary.data
 
 import com.rusdili.pro.core.common.FlashcardDeck
+import com.rusdili.pro.core.common.LearningLanguage
 import com.rusdili.pro.core.common.Word
 import com.rusdili.pro.core.database.DeckWithWords
 import com.rusdili.pro.core.database.FlashcardDeckDao
@@ -20,10 +21,12 @@ import kotlinx.coroutines.flow.map
 class RoomFlashcardDeckRepository @Inject constructor(
     private val deckDao: FlashcardDeckDao
 ) : FlashcardDeckRepository {
-    override fun observeDecks(): Flow<List<FlashcardDeck>> =
-        deckDao.observeDecksWithWords().map { rows -> rows.map(DeckWithWords::toDomain) }
+    override fun observeDecks(language: LearningLanguage): Flow<List<FlashcardDeck>> =
+        deckDao.observeDecksWithWords(language.code)
+            .map { rows -> rows.map(DeckWithWords::toDomain) }
 
     override suspend fun createDeck(
+        language: LearningLanguage,
         name: String,
         description: String,
         initialWords: List<String>
@@ -32,6 +35,7 @@ class RoomFlashcardDeckRepository @Inject constructor(
         require(trimmedName.isNotEmpty())
         val deckId = deckDao.insertDeck(
             FlashcardDeckEntity(
+                language = language.code,
                 name = trimmedName,
                 description = description.trim()
             )
@@ -39,7 +43,10 @@ class RoomFlashcardDeckRepository @Inject constructor(
         if (initialWords.isNotEmpty()) {
             deckDao.addWordsToDeck(
                 initialWords.distinct().map { russian ->
-                    FlashcardDeckWordEntity(deckId = deckId, wordRussian = russian)
+                    FlashcardDeckWordEntity(
+                        deckId = deckId,
+                        wordId = "${language.code}:$russian"
+                    )
                 }
             )
         }
@@ -50,12 +57,25 @@ class RoomFlashcardDeckRepository @Inject constructor(
         deckDao.deleteDeck(deckId)
     }
 
-    override suspend fun addWordToDeck(deckId: Long, wordRussian: String) {
-        deckDao.addWordToDeck(FlashcardDeckWordEntity(deckId = deckId, wordRussian = wordRussian))
+    override suspend fun addWordToDeck(
+        language: LearningLanguage,
+        deckId: Long,
+        wordRussian: String
+    ) {
+        deckDao.addWordToDeck(
+            FlashcardDeckWordEntity(
+                deckId = deckId,
+                wordId = "${language.code}:$wordRussian"
+            )
+        )
     }
 
-    override suspend fun removeWordFromDeck(deckId: Long, wordRussian: String) {
-        deckDao.removeWordFromDeck(deckId, wordRussian)
+    override suspend fun removeWordFromDeck(
+        language: LearningLanguage,
+        deckId: Long,
+        wordRussian: String
+    ) {
+        deckDao.removeWordFromDeck(deckId, "${language.code}:$wordRussian")
     }
 }
 
@@ -64,7 +84,8 @@ private fun DeckWithWords.toDomain() = FlashcardDeck(
     name = deck.name,
     description = deck.description,
     words = words.sortedBy { it.russian }.map(WordEntity::toDomain),
-    createdAt = deck.createdAt
+    createdAt = deck.createdAt,
+    language = deck.language
 )
 
 private fun WordEntity.toDomain() = Word(
@@ -75,7 +96,8 @@ private fun WordEntity.toDomain() = Word(
     aspectPair = aspectPair,
     isFavorite = isFavorite,
     nextReviewDate = nextReviewDate,
-    reviewStage = reviewStage
+    reviewStage = reviewStage,
+    language = language
 )
 
 @Module
