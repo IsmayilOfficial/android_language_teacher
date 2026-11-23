@@ -21,9 +21,10 @@ import javax.inject.Singleton
         NewsEntity::class,
         FlashcardDeckEntity::class,
         FlashcardDeckWordEntity::class,
-        SearchHistoryEntity::class
+        SearchHistoryEntity::class,
+        ReviewSessionEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class RusdiliDatabase : RoomDatabase() {
@@ -32,6 +33,7 @@ abstract class RusdiliDatabase : RoomDatabase() {
     abstract fun newsDao(): NewsDao
     abstract fun flashcardDeckDao(): FlashcardDeckDao
     abstract fun searchHistoryDao(): SearchHistoryDao
+    abstract fun reviewSessionDao(): ReviewSessionDao
 }
 
 @Module
@@ -87,11 +89,28 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `review_sessions` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `sessionType` TEXT NOT NULL,
+                    `totalItems` INTEGER NOT NULL,
+                    `successfulItems` INTEGER NOT NULL,
+                    `xpEarned` INTEGER NOT NULL,
+                    `completedAt` INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RusdiliDatabase =
         Room.databaseBuilder(context, RusdiliDatabase::class.java, "rusdili.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .addCallback(object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
@@ -141,4 +160,8 @@ object DatabaseModule {
     @Provides
     fun provideSearchHistoryDao(database: RusdiliDatabase): SearchHistoryDao =
         database.searchHistoryDao()
+
+    @Provides
+    fun provideReviewSessionDao(database: RusdiliDatabase): ReviewSessionDao =
+        database.reviewSessionDao()
 }

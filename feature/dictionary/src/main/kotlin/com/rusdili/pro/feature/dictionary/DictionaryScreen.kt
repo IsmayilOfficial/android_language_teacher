@@ -19,11 +19,14 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -76,6 +79,7 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Lüğət", style = MaterialTheme.typography.headlineMedium)
+        val hasCyrillicQuery = remember(data.query) { containsCyrillic(data.query) }
         OutlinedTextField(
             value = data.query,
             onValueChange = viewModel::search,
@@ -83,11 +87,33 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
                 if (data.query.isNotEmpty()) {
-                    IconButton(
-                        onClick = { viewModel.search("") },
-                        modifier = Modifier.testTag("dict_clear_search_button")
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Axtarışı təmizlə")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (hasCyrillicQuery) {
+                            IconButton(
+                                onClick = { viewModel.speak(data.query) },
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("dict_search_speak_query")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Axtarılan sözü səsləndir: ${data.query}",
+                                    tint = if (data.speakingText == data.query.trim()) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        LocalContentColor.current
+                                    }
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { viewModel.search("") },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("dict_clear_search_button")
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Axtarışı təmizlə")
+                        }
                     }
                 }
             },
@@ -96,6 +122,14 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                 .testTag("dict_search_input"),
             singleLine = true
         )
+        if (!data.isSpeechAvailable) {
+            Text(
+                text = "Qeyd: Bu cihazda rus dili səs paketi aktiv deyil.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("dict_tts_unavailable_notice")
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,12 +202,45 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                     )
                 }
                 if (data.words.isEmpty()) {
-                    Text(
-                        if (data.section == DictionarySection.FAVORITES) "Seçilmiş söz yoxdur"
-                        else "Uyğun söz tapılmadı"
-                    )
+                    if (data.section == DictionarySection.ALL && hasCyrillicQuery) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "«${data.query.trim()}» lüğətdə tapılmadı, amma tələffüzünü dinləyə bilərsən.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Button(
+                                    onClick = { viewModel.speak(data.query) },
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("dict_empty_speak_query")
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = null
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Səsləndir")
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            if (data.section == DictionarySection.FAVORITES) "Seçilmiş söz yoxdur"
+                            else "Uyğun söz tapılmadı"
+                        )
+                    }
                 }
                 data.words.forEach { word ->
+                    val isWordSpeaking = data.speakingText == word.russian
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
@@ -198,7 +265,12 @@ private fun DictionaryContent(data: DictionaryData, viewModel: DictionaryViewMod
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Sözü rusca səsləndir: ${word.russian}"
+                                contentDescription = "Sözü rusca səsləndir: ${word.russian}",
+                                tint = if (isWordSpeaking) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    LocalContentColor.current
+                                }
                             )
                         }
                         IconButton(
@@ -595,3 +667,7 @@ private fun generatedCaseForms(word: String, gender: String?): List<Triple<Strin
     }
     return names.indices.map { index -> Triple(names[index], singular[index], plural[index]) }
 }
+
+private val cyrillicCharRegex = Regex("[\\u0400-\\u04FF]")
+
+private fun containsCyrillic(text: String): Boolean = cyrillicCharRegex.containsMatchIn(text)

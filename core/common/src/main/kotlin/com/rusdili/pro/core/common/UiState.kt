@@ -44,3 +44,20 @@ data class SearchHistoryEntry(
     val matchedTranslation: String? = null,
     val searchedAt: Long = 0L
 )
+
+enum class ReviewSessionType { DAILY_QUIZ, FLASHCARD_REVIEW }
+
+data class ReviewSession(
+    val id: Long = 0L,
+    val sessionType: ReviewSessionType,
+    val totalItems: Int,
+    val successfulItems: Int,
+    val xpEarned: Int,
+    val completedAt: Long
+) {
+    val accuracyPercent: Int
+        get() = if (totalItems > 0) ((successfulItems * 100f) / totalItems).toInt() else 0
+
+    val isSuccessful: Boolean
+        get() = successfulItems > 0 && accuracyPercent >= 60
+}

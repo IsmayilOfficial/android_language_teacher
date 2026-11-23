@@ -96,3 +96,13 @@ data class SearchHistoryEntity(
     val matchedTranslation: String? = null,
     val searchedAt: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "review_sessions")
+data class ReviewSessionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val sessionType: String,
+    val totalItems: Int,
+    val successfulItems: Int,
+    val xpEarned: Int,
+    val completedAt: Long = System.currentTimeMillis()
+)

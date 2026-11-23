@@ -1,5 +1,6 @@
 package com.rusdili.pro
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,16 +14,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rusdili.pro.core.common.AppConstants
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
+    private var pendingDestination by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingDestination = extractNotificationDestination(intent)
         enableEdgeToEdge()
         setContent {
             val darkThemePreference by themeViewModel.darkThemePreference.collectAsStateWithLifecycle()
@@ -49,10 +55,23 @@ class MainActivity : ComponentActivity() {
                 ) {
                     RusDiliNavigation(
                         isDarkTheme = isDarkTheme,
-                        onToggleTheme = { themeViewModel.toggleTheme(isDarkTheme) }
+                        onToggleTheme = { themeViewModel.toggleTheme(isDarkTheme) },
+                        pendingDestination = pendingDestination,
+                        onDestinationConsumed = { pendingDestination = null }
                     )
                 }
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractNotificationDestination(intent)?.let { destination ->
+            pendingDestination = destination
+        }
+    }
+
+    private fun extractNotificationDestination(intent: Intent?): String? =
+        intent?.getStringExtra(AppConstants.EXTRA_NOTIFICATION_DESTINATION)
 }

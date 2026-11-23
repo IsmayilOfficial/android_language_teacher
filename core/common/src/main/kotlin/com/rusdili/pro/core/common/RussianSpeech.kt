@@ -18,32 +18,57 @@ class RussianSpeech @Inject constructor(
     private val engine = TextToSpeech(context, this)
     private var ready = false
     private var pendingRequest: Pair<String, Boolean>? = null
+    @Volatile private var activeText: String? = null
+    @Volatile private var activeUtteranceId: String? = null
+    private var utteranceCounter = 0L
 
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    private val _speakingText = MutableStateFlow<String?>(null)
+    val speakingText: StateFlow<String?> = _speakingText.asStateFlow()
+
+    private val _isAvailable = MutableStateFlow(true)
+    val isAvailable: StateFlow<Boolean> = _isAvailable.asStateFlow()
+
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) {
             ready = false
+            _isAvailable.value = false
             return
         }
         engine.setOnUtteranceProgressListener(
             object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    _isSpeaking.value = true
+                    if (utteranceId == activeUtteranceId) {
+                        _isSpeaking.value = true
+                        _speakingText.value = activeText
+                    }
                 }
 
                 override fun onDone(utteranceId: String?) {
-                    _isSpeaking.value = false
+                    if (utteranceId == activeUtteranceId) {
+                        activeText = null
+                        _isSpeaking.value = false
+                        _speakingText.value = null
+                    }
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    _isSpeaking.value = false
+                    if (utteranceId == activeUtteranceId) {
+                        activeText = null
+                        _isSpeaking.value = false
+                        _speakingText.value = null
+                    }
                 }
 
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    _isSpeaking.value = false
+                    if (utteranceId == activeUtteranceId) {
+                        activeText = null
+                        _isSpeaking.value = false
+                        _speakingText.value = null
+                    }
                 }
             }
         )
@@ -54,6 +79,7 @@ class RussianSpeech @Inject constructor(
             isSupported(engine.setLanguage(Locale.forLanguageTag("ru")))
         }
         ready = supported
+        _isAvailable.value = supported
         if (ready) {
             pendingRequest?.let { (text, slow) ->
                 pendingRequest = null
@@ -74,15 +100,21 @@ class RussianSpeech @Inject constructor(
 
     fun stop() {
         pendingRequest = null
+        activeText = null
+        activeUtteranceId = null
         if (ready) {
             engine.stop()
         }
         _isSpeaking.value = false
+        _speakingText.value = null
     }
 
     private fun speakNow(text: String, slow: Boolean) {
+        val utteranceId = "ll-${++utteranceCounter}"
+        activeText = text
+        activeUtteranceId = utteranceId
         engine.setSpeechRate(if (slow) 0.72f else 1.0f)
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ll-${text.hashCode()}")
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     private fun isSupported(languageStatus: Int): Boolean =

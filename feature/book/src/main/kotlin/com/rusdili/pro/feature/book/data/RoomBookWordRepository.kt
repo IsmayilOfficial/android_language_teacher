@@ -68,7 +68,14 @@ private val grammaticalForms = mapOf(
 )
 
 private fun WordEntity.toDomain() = Word(
-    russian, translation, gender, example, aspectPair, isFavorite, nextReviewDate, reviewStage
+    russian = russian,
+    translation = translation,
+    gender = gender,
+    example = example,
+    aspectPair = aspectPair,
+    isFavorite = isFavorite,
+    nextReviewDate = nextReviewDate,
+    reviewStage = reviewStage
 )
 
 @Module

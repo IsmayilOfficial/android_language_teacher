@@ -34,7 +34,9 @@ data class DictionaryData(
     val allWords: List<Word>,
     val favoriteWords: List<Word>,
     val decks: List<FlashcardDeck>,
-    val history: List<SearchHistoryEntry>
+    val history: List<SearchHistoryEntry>,
+    val speakingText: String? = null,
+    val isSpeechAvailable: Boolean = true
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -66,12 +68,18 @@ class DictionaryViewModel @Inject constructor(
         WordCollections(allWords, favoriteWords, decks, history)
     }
 
+    private val speechStateFlow = combine(
+        speech.speakingText,
+        speech.isAvailable
+    ) { speaking, available -> speaking to available }
+
     val uiState = combine(
         query,
         section,
         filteredWordsFlow,
-        wordCollectionsFlow
-    ) { text, activeSection, displayedWords, collections ->
+        wordCollectionsFlow,
+        speechStateFlow
+    ) { text, activeSection, displayedWords, collections, (speaking, available) ->
         val state: UiState<DictionaryData> = UiState.Success(
             DictionaryData(
                 query = text,
@@ -80,7 +88,9 @@ class DictionaryViewModel @Inject constructor(
                 allWords = collections.allWords,
                 favoriteWords = collections.favoriteWords,
                 decks = collections.decks,
-                history = collections.history
+                history = collections.history,
+                speakingText = speaking,
+                isSpeechAvailable = available
             )
         )
         state

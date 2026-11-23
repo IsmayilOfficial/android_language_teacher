@@ -18,18 +18,25 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,10 +48,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import java.util.Calendar
 
 private val REMINDER_PRESET_HOURS = listOf(9, 13, 19, 21)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DailyReminderCard(
     enabled: Boolean,
@@ -57,6 +67,7 @@ internal fun DailyReminderCard(
     val context = LocalContext.current
     var permissionDeniedNote by remember { mutableStateOf(false) }
     var testSentMessage by remember { mutableStateOf(false) }
+    var showTimePickerDialog by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -68,6 +79,10 @@ internal fun DailyReminderCard(
             permissionDeniedNote = true
             onToggleReminder(false, hour, minute)
         }
+    }
+
+    val nextDayLabel = remember(hour, minute, enabled) {
+        if (!enabled) "" else computeNextDayLabel(hour, minute)
     }
 
     Card(
@@ -95,7 +110,7 @@ internal fun DailyReminderCard(
                         } else {
                             Icons.Default.NotificationsNone
                         },
-                        contentDescription = "Gündəlik xatırlatma",
+                        contentDescription = "Gündəlik təkrar xatırlatması",
                         tint = if (enabled) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -106,15 +121,15 @@ internal fun DailyReminderCard(
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Gündəlik xatırlatma",
+                            text = "Gündəlik təkrar xatırlatması",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = if (enabled) {
-                                "Hər gün saat %02d:%02d-da bildiriş".format(hour, minute)
+                                "Hər gün saat %02d:%02d-da ($nextDayLabel)".format(hour, minute)
                             } else {
-                                "Dərsləri unutmamaq üçün xatırlatma qur"
+                                "Təkrar sessiyalarını unutmamaq üçün vaxt təyin et"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -137,7 +152,7 @@ internal fun DailyReminderCard(
                         ) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         } else {
-                            permissionDeniedNote = false
+                            permissionDeniedNote = !NotificationManagerCompat.from(context).areNotificationsEnabled()
                             onToggleReminder(true, hour, minute)
                         }
                     },
@@ -147,9 +162,10 @@ internal fun DailyReminderCard(
 
             if (permissionDeniedNote) {
                 Text(
-                    text = "Bildiriş icazəsi verilmədi. Xatırlatmalar üçün sistem ayarlarından bildirişlərə icazə verin.",
+                    text = "Bildiriş icazəsi aktiv deyil. Xatırlatmalar üçün sistem ayarlarından bildirişlərə icazə verin.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("reminder_permission_warning")
                 )
             }
 
@@ -168,9 +184,21 @@ internal fun DailyReminderCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
+                        AssistChip(
+                            onClick = { showTimePickerDialog = true },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Xüsusi vaxt seç",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = { Text("%02d:%02d".format(hour, minute)) },
+                            modifier = Modifier.testTag("reminder_custom_time_button")
+                        )
                         REMINDER_PRESET_HOURS.forEach { presetHour ->
                             FilterChip(
-                                selected = hour == presetHour,
+                                selected = hour == presetHour && minute == 0,
                                 onClick = {
                                     testSentMessage = false
                                     onSelectTime(presetHour, 0)
@@ -188,8 +216,21 @@ internal fun DailyReminderCard(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                onTestNotification()
-                                testSentMessage = true
+                                val runtimeGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                val systemEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+                                if (!runtimeGranted) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else if (!systemEnabled) {
+                                    permissionDeniedNote = true
+                                } else {
+                                    permissionDeniedNote = false
+                                    onTestNotification()
+                                    testSentMessage = true
+                                }
                             },
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
@@ -210,4 +251,58 @@ internal fun DailyReminderCard(
             }
         }
     }
+
+    if (showTimePickerDialog) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = hour.coerceIn(0, 23),
+            initialMinute = minute.coerceIn(0, 59),
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePickerDialog = false },
+            title = {
+                Text(
+                    text = "Xatırlatma vaxtını seç",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                TimePicker(
+                    state = timePickerState,
+                    modifier = Modifier.testTag("reminder_time_picker")
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        testSentMessage = false
+                        onSelectTime(timePickerState.hour, timePickerState.minute)
+                        showTimePickerDialog = false
+                    },
+                    modifier = Modifier.testTag("reminder_time_confirm_button")
+                ) {
+                    Text("Təsdiq et")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showTimePickerDialog = false },
+                    modifier = Modifier.testTag("reminder_time_cancel_button")
+                ) {
+                    Text("Ləğv et")
+                }
+            }
+        )
+    }
+}
+
+private fun computeNextDayLabel(hour: Int, minute: Int): String {
+    val now = Calendar.getInstance()
+    val target = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+        set(Calendar.MINUTE, minute.coerceIn(0, 59))
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return if (target.timeInMillis > now.timeInMillis) "növbəti: bu gün" else "növbəti: sabah"
 }

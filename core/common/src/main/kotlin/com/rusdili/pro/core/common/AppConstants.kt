@@ -7,4 +7,6 @@ object AppConstants {
     const val DAILY_PRACTICE_QUESTION_COUNT = 10
     const val MAX_SEARCH_HISTORY = 20
     const val CHAPTER_COUNT = 15
+    const val EXTRA_NOTIFICATION_DESTINATION = "notification_destination"
+    const val DESTINATION_PRACTICE = "practice"
 }

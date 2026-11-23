@@ -109,3 +109,12 @@ interface SearchHistoryDao {
     )
     suspend fun trimToLimit(limit: Int)
 }
+
+@Dao
+interface ReviewSessionDao {
+    @Query("SELECT * FROM review_sessions ORDER BY completedAt DESC")
+    fun observeAll(): Flow<List<ReviewSessionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(session: ReviewSessionEntity): Long
+}

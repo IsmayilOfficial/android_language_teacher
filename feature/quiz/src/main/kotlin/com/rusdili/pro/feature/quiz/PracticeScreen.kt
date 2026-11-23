@@ -1,5 +1,6 @@
 package com.rusdili.pro.feature.quiz
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,17 +51,42 @@ private fun PracticeContent(data: PracticeData, viewModel: PracticeViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Məşq", style = MaterialTheme.typography.headlineMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = data.mode == PracticeMode.DAILY,
                 onClick = { viewModel.setMode(PracticeMode.DAILY) },
+                label = { Text("Gündəlik məşq") },
                 modifier = Modifier.testTag("quiz_mode_daily")
-            ) { Text("Gündəlik məşq") }
-            OutlinedButton(
+            )
+            FilterChip(
+                selected = data.mode == PracticeMode.FLASHCARDS,
                 onClick = { viewModel.setMode(PracticeMode.FLASHCARDS) },
+                label = { Text("Kartlar") },
                 modifier = Modifier.testTag("quiz_mode_flashcards")
-            ) { Text("Kartlar") }
+            )
+            FilterChip(
+                selected = data.mode == PracticeMode.PROGRESS,
+                onClick = { viewModel.setMode(PracticeMode.PROGRESS) },
+                label = { Text("İnkişaf") },
+                modifier = Modifier.testTag("quiz_mode_progress")
+            )
         }
-        if (data.mode == PracticeMode.DAILY) DailyPractice(data, viewModel) else Flashcards(data, viewModel)
+        when (data.mode) {
+            PracticeMode.DAILY -> DailyPractice(data, viewModel)
+            PracticeMode.FLASHCARDS -> Flashcards(data, viewModel)
+            PracticeMode.PROGRESS -> PracticeProgressDashboard(
+                data = data,
+                onSelectRange = viewModel::setProgressRange,
+                onSelectMetric = viewModel::setProgressMetric,
+                onStartDaily = { viewModel.setMode(PracticeMode.DAILY) },
+                onStartFlashcards = { viewModel.setMode(PracticeMode.FLASHCARDS) }
+            )
+        }
     }
 }
 

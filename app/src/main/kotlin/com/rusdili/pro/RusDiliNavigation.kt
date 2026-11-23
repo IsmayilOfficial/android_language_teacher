@@ -78,13 +78,32 @@ private val tabs = listOf(
 @Composable
 fun RusDiliNavigation(
     isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit
+    onToggleTheme: () -> Unit,
+    pendingDestination: String? = null,
+    onDestinationConsumed: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentDestination = backStack?.destination
     val currentTab = tabs.firstOrNull { tab ->
         currentDestination?.hierarchy?.any { it.route == tab.route } == true
+    }
+
+    androidx.compose.runtime.LaunchedEffect(pendingDestination) {
+        val target = pendingDestination ?: return@LaunchedEffect
+        if (tabs.any { it.route == target }) {
+            navController.navigate(
+                target,
+                navOptions {
+                    popUpTo(navController.graph.startDestinationId) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            )
+        }
+        onDestinationConsumed()
     }
 
     Scaffold(
